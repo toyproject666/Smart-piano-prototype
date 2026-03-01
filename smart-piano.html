@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Piano</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0d0f;
+      --panel: #16161a;
+      --border: #2a2a35;
+      --accent: #e8c97e;
+      --accent2: #7eb8e8;
+      --accent3: #b87ee8;
+      --accent4: #7ee8b8;
+      --text: #e8e8f0;
+      --muted: #6b6b80;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans SC', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px;
+      gap: 24px;
+    }
+    h1 {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.4rem;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+    /* Timbre selector */
+    .timbre-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .timbre-btn {
+      background: var(--panel);
+      border: 1.5px solid var(--border);
+      color: var(--muted);
+      padding: 8px 18px;
+      border-radius: 99px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      transition: all 0.15s;
+    }
+    .timbre-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .timbre-btn.active {
+      background: var(--accent);
+      color: #0d0d0f;
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+    /* Layout */
+    .main-layout {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 100%;
+      max-width: 880px;
+    }
+    /* Chord panel */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .panel h3 {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .chord-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .chord-key {
+      background: #1e1e26;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 8px;
+      text-align: center;
+      transition: all 0.1s;
+      cursor: default;
+    }
+    .chord-key.pressed {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0d0d0f;
+      transform: scale(0.96);
+    }
+    .chord-key .key-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 1rem;
+      font-weight: 700;
+      display: block;
+    }
+    .chord-key .chord-name {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .chord-key.pressed .chord-name { color: #0d0d0f99; }
+
+    /* Melody panel */
+    .melody-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .melody-key {
+      background: #1e1e26;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 6px;
+      text-align: center;
+      transition: all 0.1s;
+      cursor: default;
+    }
+    .melody-key.pressed {
+      background: var(--accent2);
+      border-color: var(--accent2);
+      color: #0d0d0f;
+      transform: scale(0.96);
+    }
+    .melody-key .key-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 1rem;
+      font-weight: 700;
+      display: block;
+    }
+    .melody-key .note-name {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .melody-key.pressed .note-name { color: #0d0d0f99; }
+
+    /* Visualizer */
+    #visualizer {
+      width: 100%;
+      max-width: 880px;
+      height: 80px;
+      border-radius: 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      display: block;
+    }
+
+    /* Status */
+    .status-bar {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+    .status-bar span { color: var(--accent); }
+
+    /* Start button */
+    #startBtn {
+      background: var(--accent);
+      color: #0d0d0f;
+      border: none;
+      border-radius: 99px;
+      padding: 12px 36px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    #startBtn:hover { opacity: 0.85; }
+    #startBtn:disabled { opacity: 0.3; cursor: default; }
+
+    #sustainIndicator { color: var(--muted); transition: color 0.1s; }
+    #sustainIndicator.on { color: #7ee8b8; }
+    .hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+
+<h1>⬡ Smart Piano</h1>
+
+<button id="startBtn">▶ 启动声音</button>
+
+<!-- Timbre selector -->
+<div class="timbre-bar" id="timbreBar">
+  <button class="timbre-btn active" data-timbre="piano">🎹 钢琴</button>
+  <button class="timbre-btn" data-timbre="guitar">🎸 吉他</button>
+  <button class="timbre-btn" data-timbre="electric">⚡ 电吉他</button>
+  <button class="timbre-btn" data-timbre="flute">🎵 长笛</button>
+  <button class="timbre-btn" data-timbre="organ">🎺 风琴</button>
+  <button class="timbre-btn" data-timbre="marimba">🪘 木琴</button>
+  <button class="timbre-btn" data-timbre="strings">🎻 弦乐</button>
+  <button class="timbre-btn" data-timbre="synth">🌀 合成器</button>
+</div>
+
+<canvas id="visualizer"></canvas>
+
+<div class="main-layout">
+  <!-- Left hand chords -->
+  <div class="panel">
+    <h3>左手 · 和弦</h3>
+    <div class="chord-grid" id="chordGrid"></div>
+  </div>
+  <!-- Right hand melody -->
+  <div class="panel">
+    <h3>右手 · 旋律</h3>
+    <div class="melody-grid" id="melodyGrid"></div>
+  </div>
+</div>
+
+<div class="status-bar" id="statusBar">和弦: <span id="chordDisplay">—</span> &nbsp;|&nbsp; 音色: <span id="timbreDisplay">钢琴</span> &nbsp;|&nbsp; 延音: <span id="sustainIndicator">OFF</span></div>
+
+<div class="hint">
+  左手 A S D F Q W E 切换和弦 (C Dm Em F G Am Bdim) &nbsp;·&nbsp; 右手 J K L ; U I O P 弹奏旋律<br>
+  空格键 按住延音 &nbsp;·&nbsp; 点击上方按钮切换音色
+</div>
+
+<script>
+let audioCtx;
+let analyser, analyserData;
+let currentChord = null;
+let currentTimbre = 'piano';
+
+// noteTable kept for reference (noteTableExt used for playback)
+
+// rightKeys: J K L ; U I O P  →  C D E F G A B 高C
+const rightKeys = { j:"C", k:"D", l:"E", ";":"F", u:"G", i:"A", o:"B", p:"C2" };
+
+// noteTable extended with high C
+const noteTableExt = { 
+  C:261.63, D:293.66, E:329.63, F:349.23, G:392.00, A:440.00, B:493.88,
+  C2:523.25, D2:587.33, E2:659.25, F2:698.46, G2:783.99, A2:880.00, B2:987.77
+};
+
+// ASDFQWE → chords for C D E F G A B scale degrees
+// A=C大调, S=D小调, D=E小调, F=F大调, Q=G大调, W=A小调, E=B减
+const chords = {
+  // C2 snap = 高八度吸附到和弦最近音 (用 2 后缀表示高八度)
+  // C和弦音: C E G  → C2吸附C2
+  // Dm和弦音: D F A → C2吸附D2
+  // Em和弦音: E G B → C2吸附B2(最近) 或 E2，取B2
+  // F和弦音:  F A C → C2吸附C2
+  // G和弦音:  G B D → C2吸附B2(最近)
+  // Am和弦音: A C E → C2吸附C2
+  // Bdim和弦音: B D F → C2吸附B2(最近)
+  a:{name:"C",   bass:130.81, snap:{C:["C"],D:["C","E"],E:["E"],F:["E","G"],G:["G"],A:["G","C"],B:["C"],   C2:["C2"]}},
+  s:{name:"Dm",  bass:73.42,  snap:{C:["D"],D:["D"],E:["D","F"],F:["F"],G:["F","A"],A:["A"],B:["A"],       C2:["D2"]}},
+  d:{name:"Em",  bass:82.41,  snap:{C:["B"],D:["E"],E:["E"],F:["E","G"],G:["G"],A:["G","B"],B:["B"],       C2:["B2"]}},
+  f:{name:"F",   bass:87.31,  snap:{C:["C"],D:["C","F"],E:["F"],F:["F"],G:["F","A"],A:["A"],B:["A","C"],   C2:["C2"]}},
+  q:{name:"G",   bass:98.00,  snap:{C:["B","D"],D:["D"],E:["D","G"],F:["G"],G:["G"],A:["G","B"],B:["B"],   C2:["B2"]}},
+  w:{name:"Am",  bass:110.00, snap:{C:["D"],D:["D"],E:["D","F"],F:["F"],G:["F","A"],A:["A"],B:["A","C"],   C2:["C2"]}},
+  e:{name:"Bdim",bass:123.47, snap:{C:["B"],D:["D","F"],E:["E"],F:["D","F"],G:["F","B"],A:["A"],B:["B"],   C2:["B2"]}}
+};
+
+const timbreNames = {piano:"钢琴", guitar:"吉他", electric:"电吉他", flute:"长笛", organ:"风琴", marimba:"木琴", strings:"弦乐", synth:"合成器"};
+
+// Build UI
+const chordOrder = ['a','s','d','f','q','w','e'];
+const chordGrid = document.getElementById('chordGrid');
+chordOrder.forEach(k => {
+  const el = document.createElement('div');
+  el.className = 'chord-key';
+  el.id = 'chord-'+k;
+  el.innerHTML = `<span class="key-label">${k.toUpperCase()}</span><span class="chord-name">${chords[k].name}</span>`;
+  chordGrid.appendChild(el);
+});
+
+const noteDisplayNames = { j:"C", k:"D", l:"E", ";":"F", u:"G", i:"A", o:"B", p:"C↑" };
+const melodyKeyOrder = ['j','k','l',';','u','i','o','p'];
+const melodyGrid = document.getElementById('melodyGrid');
+melodyKeyOrder.forEach(k => {
+  const el = document.createElement('div');
+  el.className = 'melody-key';
+  el.id = 'melody-'+k;
+  el.innerHTML = `<span class="key-label">${k === ';' ? ';' : k.toUpperCase()}</span><span class="note-name">${noteDisplayNames[k]}</span>`;
+  melodyGrid.appendChild(el);
+});
+
+document.getElementById('startBtn').addEventListener('click', function() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  analyserData = new Uint8Array(analyser.frequencyBinCount);
+  analyser.connect(audioCtx.destination);
+  this.disabled = true;
+  this.textContent = '✓ 已启动';
+  drawVisualizer();
+});
+
+// Timbre buttons
+document.getElementById('timbreBar').addEventListener('click', e => {
+  const btn = e.target.closest('.timbre-btn');
+  if (!btn) return;
+  document.querySelectorAll('.timbre-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTimbre = btn.dataset.timbre;
+  document.getElementById('timbreDisplay').textContent = timbreNames[currentTimbre];
+});
+
+// ---- Sound synthesis per timbre ----
+function createOscWithType(freq, type, detune=0) {
+  const osc = audioCtx.createOscillator();
+  osc.frequency.value = freq;
+  osc.type = type;
+  osc.detune.value = detune;
+  return osc;
+}
+
+function playNote(freq, duration, volume) {
+  if (!audioCtx) return;
+  const out = analyser;
+  const now = audioCtx.currentTime;
+
+  switch(currentTimbre) {
+
+    case 'piano': {
+      // Piano: fast attack, exponential decay, sine + triangle blend + harmonic
+      const gain = audioCtx.createGain();
+      gain.connect(out);
+      const osc1 = createOscWithType(freq, 'sine');
+      const osc2 = createOscWithType(freq * 2, 'sine');
+      const osc3 = createOscWithType(freq * 3, 'triangle');
+      const g1 = audioCtx.createGain(); g1.gain.value = 0.5;
+      const g2 = audioCtx.createGain(); g2.gain.value = 0.2;
+      const g3 = audioCtx.createGain(); g3.gain.value = 0.07;
+      osc1.connect(g1); osc2.connect(g2); osc3.connect(g3);
+      g1.connect(gain); g2.connect(gain); g3.connect(gain);
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(volume * 0.3, now + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      [osc1,osc2,osc3].forEach(o => { o.start(now); o.stop(now + duration); });
+      break;
+    }
+
+    case 'guitar': {
+      // Karplus-Strong inspired: noise burst → lowpass → quick decay
+      const gain = audioCtx.createGain();
+      gain.connect(out);
+      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      src.loopStart = 0; src.loopEnd = 1 / freq;
+      // lowpass to smooth it
+      const lp = audioCtx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = freq * 4;
+      src.connect(lp); lp.connect(gain);
+      gain.gain.setValueAtTime(volume * 0.9, now);
+      gain.gain.exponentialRampToValueAtTime(volume * 0.4, now + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration * 0.9);
+      src.start(now); src.stop(now + duration);
+      break;
+    }
+
+    case 'electric': {
+      // Electric guitar: sawtooth + distortion-like waveshaper
+      const gain = audioCtx.createGain();
+      const ws = audioCtx.createWaveShaper();
+      const curve = new Float32Array(256);
+      for (let i = 0; i < 256; i++) { const x = (i*2/255)-1; curve[i] = (Math.PI+300)*x/(Math.PI+300*Math.abs(x)); }
+      ws.curve = curve;
+      ws.connect(out);
+      gain.connect(ws);
+      const osc = createOscWithType(freq, 'sawtooth');
+      const osc2 = createOscWithType(freq, 'sawtooth', 6);
+      const g2 = audioCtx.createGain(); g2.gain.value = 0.5;
+      osc.connect(gain); osc2.connect(g2); g2.connect(gain);
+      gain.gain.setValueAtTime(volume * 0.4, now);
+      gain.gain.exponentialRampToValueAtTime(volume * 0.15, now + 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      [osc, osc2].forEach(o => { o.start(now); o.stop(now + duration); });
+      break;
+    }
+
+    case 'flute': {
+      // Flute: sine + slight noise + vibrato
+      const gain = audioCtx.createGain();
+      gain.connect(out);
+      const osc = createOscWithType(freq, 'sine');
+      // vibrato LFO
+      const lfo = audioCtx.createOscillator(); lfo.frequency.value = 5;
+      const lfoGain = audioCtx.createGain(); lfoGain.gain.value = 4;
+      lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+      // noise layer
+      const noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
+      const nd = noiseBuf.getChannelData(0);
+      for (let i=0;i<nd.length;i++) nd[i] = (Math.random()*2-1)*0.05;
+      const noise = audioCtx.createBufferSource(); noise.buffer = noiseBuf;
+      const hp = audioCtx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=freq*2;
+      noise.connect(hp); hp.connect(gain);
+      osc.connect(gain);
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(volume, now + 0.06);
+      gain.gain.setValueAtTime(volume, now + duration - 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      osc.start(now); osc.stop(now + duration);
+      lfo.start(now); lfo.stop(now + duration);
+      noise.start(now);
+      break;
+    }
+
+    case 'organ': {
+      // Hammond-ish: multiple sine harmonics sustained
+      const gain = audioCtx.createGain();
+      gain.connect(out);
+      const harmonics = [1, 2, 3, 4, 6];
+      const vols      = [0.4, 0.3, 0.15, 0.1, 0.05];
+      harmonics.forEach((h, idx) => {
+        const o = createOscWithType(freq * h, 'sine');
+        const g = audioCtx.createGain(); g.gain.value = vols[idx];
+        o.connect(g); g.connect(gain);
+        o.start(now); o.stop(now + duration);
+      });
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(volume, now + 0.01);
+      gain.gain.setValueAtTime(volume, now + duration - 0.05);
+      gain.gain.linearRampToValueAtTime(0, now + duration);
+      break;
+    }
+
+    case 'marimba': {
+      // Marimba: sine + quick attack, fast decay, slight reverb tail
+      const gain = audioCtx.createGain();
+      gain.connect(out);
+      const osc = createOscWithType(freq, 'sine');
+      const osc2 = createOscWithType(freq * 4, 'sine');
+      const g2 = audioCtx.createGain(); g2.gain.value = 0.1;
+      osc.connect(gain); osc2.connect(g2); g2.connect(gain);
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration * 0.5);
+      osc.start(now); osc.stop(now + duration);
+      osc2.start(now); osc2.stop(now + duration * 0.3);
+      break;
+    }
+
+    case 'strings': {
+      // Strings: slow attack, sawtooth + lowpass, chorus-like detune
+      const gain = audioCtx.createGain();
+      const lp = audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=freq*3; lp.Q.value=0.5;
+      lp.connect(out); gain.connect(lp);
+      const voices = [-8, 0, 8];
+      voices.forEach(det => {
+        const o = createOscWithType(freq, 'sawtooth', det);
+        const g = audioCtx.createGain(); g.gain.value = 0.3;
+        o.connect(g); g.connect(gain);
+        o.start(now); o.stop(now + duration);
+      });
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(volume, now + 0.25);
+      gain.gain.setValueAtTime(volume, now + duration - 0.2);
+      gain.gain.linearRampToValueAtTime(0, now + duration);
+      break;
+    }
+
+    case 'synth': {
+      // Synth: square + sub + envelope + filter sweep
+      const gain = audioCtx.createGain();
+      const filter = audioCtx.createBiquadFilter(); filter.type='lowpass'; filter.Q.value=8;
+      filter.frequency.setValueAtTime(freq * 1.5, now);
+      filter.frequency.exponentialRampToValueAtTime(freq * 8, now + 0.05);
+      filter.frequency.exponentialRampToValueAtTime(freq * 1.2, now + duration);
+      filter.connect(out); gain.connect(filter);
+      const osc = createOscWithType(freq, 'square');
+      const sub = createOscWithType(freq * 0.5, 'sine');
+      const sg = audioCtx.createGain(); sg.gain.value = 0.35;
+      osc.connect(gain); sub.connect(sg); sg.connect(gain);
+      gain.gain.setValueAtTime(volume * 0.8, now);
+      gain.gain.exponentialRampToValueAtTime(volume * 0.5, now + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      osc.start(now); osc.stop(now + duration);
+      sub.start(now); sub.stop(now + duration);
+      break;
+    }
+  }
+}
+
+// Keyboard handling
+const pressedKeys = new Set();
+let sustain = false;
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (!sustain) {
+      sustain = true;
+      const si = document.getElementById('sustainIndicator');
+      si.textContent = 'ON'; si.classList.add('on');
+    }
+    return;
+  }
+  if (!audioCtx || pressedKeys.has(e.key)) return;
+  pressedKeys.add(e.key);
+
+  const dur = sustain ? 4.0 : 1.0;
+  const melDur = sustain ? 3.5 : 0.8;
+
+  if (chords[e.key]) {
+    currentChord = chords[e.key];
+    document.getElementById('chordDisplay').textContent = currentChord.name;
+    document.getElementById('chord-'+e.key).classList.add('pressed');
+    playNote(currentChord.bass, dur, 0.35);
+  }
+  if (rightKeys[e.key] && currentChord) {
+    const inputNote = rightKeys[e.key];
+    const targets = currentChord.snap[inputNote];
+    const el = document.getElementById('melody-'+e.key);
+    if (el) el.classList.add('pressed');
+    targets.forEach(n => playNote(noteTableExt[n], melDur, 0.28));
+  }
+});
+
+document.addEventListener('keyup', e => {
+  if (e.code === 'Space') {
+    sustain = false;
+    const si = document.getElementById('sustainIndicator');
+    si.textContent = 'OFF'; si.classList.remove('on');
+    return;
+  }
+  pressedKeys.delete(e.key);
+  if (chords[e.key]) document.getElementById('chord-'+e.key).classList.remove('pressed');
+  if (rightKeys[e.key]) {
+    const el = document.getElementById('melody-'+e.key);
+    if (el) el.classList.remove('pressed');
+  }
+});
+
+// Visualizer
+const canvas = document.getElementById('visualizer');
+const ctx2 = canvas.getContext('2d');
+function resizeCanvas() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
+resizeCanvas(); window.addEventListener('resize', resizeCanvas);
+
+function drawVisualizer() {
+  requestAnimationFrame(drawVisualizer);
+  if (!analyser) return;
+  analyser.getByteFrequencyData(analyserData);
+  const W = canvas.width, H = canvas.height;
+  ctx2.fillStyle = '#16161a';
+  ctx2.fillRect(0, 0, W, H);
+  const bars = analyserData.length;
+  const bw = W / bars;
+  for (let i = 0; i < bars; i++) {
+    const v = analyserData[i] / 255;
+    const h = v * H;
+    const hue = 40 + i * 0.8;
+    ctx2.fillStyle = `hsla(${hue}, 80%, 60%, ${0.6 + v * 0.4})`;
+    ctx2.fillRect(i * bw, H - h, bw - 1, h);
+  }
+}
+</script>
+</body>
+</html>
