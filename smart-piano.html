@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Smart Piano</title>
+  <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -221,6 +222,139 @@
     #sustainIndicator { color: var(--muted); transition: color 0.1s; }
     #sustainIndicator.on { color: #7ee8b8; }
     #drumDisplay { color: var(--muted); transition: color 0.1s; }
+
+    /* Settings button */
+    #settingsBtn {
+      background: var(--panel);
+      border: 1.5px solid var(--border);
+      color: var(--muted);
+      padding: 8px 18px;
+      border-radius: 99px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      transition: all 0.15s;
+    }
+    #settingsBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Modal overlay */
+    #settingsOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #settingsOverlay.open { display: flex; }
+    #settingsModal {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      width: min(700px, 95vw);
+      max-height: 85vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .settings-header h2 {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.9rem;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+    #settingsClose {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.4rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+    #settingsClose:hover { color: var(--text); }
+    .settings-section h4 {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .key-mapping-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 8px;
+    }
+    .key-map-item {
+      background: #1e1e26;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .key-map-item .km-label {
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+    .key-map-item .km-key {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--text);
+      background: #2a2a35;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 4px 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.1s;
+      min-height: 28px;
+    }
+    .key-map-item .km-key:hover { border-color: var(--accent2); color: var(--accent2); }
+    .key-map-item .km-key.listening {
+      border-color: var(--accent);
+      color: var(--accent);
+      animation: pulse 0.6s infinite alternate;
+    }
+    @keyframes pulse { from { opacity: 1; } to { opacity: 0.4; } }
+    .settings-footer {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    .settings-footer button {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      padding: 8px 20px;
+      border-radius: 99px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    #settingsReset {
+      background: none;
+      border: 1.5px solid var(--border);
+      color: var(--muted);
+    }
+    #settingsReset:hover { border-color: #e87e7e; color: #e87e7e; }
+    #settingsSave {
+      background: var(--accent);
+      border: none;
+      color: #0d0d0f;
+      font-weight: 700;
+    }
+    #settingsSave:hover { opacity: 0.85; }
+
     .hint {
       font-size: 0.78rem;
       color: var(--muted);
@@ -234,11 +368,50 @@
 <h1>⬡ Smart Piano</h1>
 
 <button id="startBtn">▶ 启动声音</button>
+<button id="settingsBtn">⚙ 键位设置</button>
+
+<!-- Settings Modal -->
+<div id="settingsOverlay">
+  <div id="settingsModal">
+    <div class="settings-header">
+      <h2>⚙ 键位设置</h2>
+      <button id="settingsClose">✕</button>
+    </div>
+    <div class="settings-section">
+      <h4>左手 · 和弦根音</h4>
+      <div class="key-mapping-grid" id="chordKeyMap"></div>
+    </div>
+    <div class="settings-section">
+      <h4>左手 · 功能修饰键</h4>
+      <div class="key-mapping-grid" id="modKeyMap"></div>
+    </div>
+    <div class="settings-section">
+      <h4>右手 · 白键旋律</h4>
+      <div class="key-mapping-grid" id="whiteKeyMap"></div>
+    </div>
+    <div class="settings-section">
+      <h4>右手 · 黑键 & 高音</h4>
+      <div class="key-mapping-grid" id="blackKeyMap"></div>
+    </div>
+    <div class="settings-section">
+      <h4>功能键</h4>
+      <div class="key-mapping-grid" id="funcKeyMap"></div>
+    </div>
+    <div class="settings-footer">
+      <button id="settingsReset">恢复默认</button>
+      <button id="settingsSave">保存</button>
+    </div>
+  </div>
+</div>
 
 <!-- Timbre selector -->
 <div class="timbre-bar" id="timbreBar">
-  <button class="timbre-btn active" data-timbre="piano">🎹 钢琴</button>
-  <button class="timbre-btn" data-timbre="guitar">🎸 吉他</button>
+  <button class="timbre-btn active" data-timbre="piano">🎹 钢琴(合成)</button>
+  <button class="timbre-btn" data-timbre="piano_sampled">🎹 钢琴(采样)</button>
+  <button class="timbre-btn" data-timbre="guitar">🎸 吉他(合成)</button>
+  <button class="timbre-btn" data-timbre="guitar_sampled">🎸 吉他(采样)</button>
+  <button class="timbre-btn" data-timbre="electric">⚡ 电吉他(合成)</button>
+  <button class="timbre-btn" data-timbre="electric_sampled">⚡ 电吉他(采样)</button>
   <button class="timbre-btn" data-timbre="electric">⚡ 电吉他</button>
   <button class="timbre-btn" data-timbre="flute">🎵 长笛</button>
   <button class="timbre-btn" data-timbre="organ">🎺 风琴</button>
@@ -354,7 +527,7 @@ function makeChord(root, quality) {
 // Keys: c, d, e, f, g, a, b  (+ s held = minor)
 const chordRoots = { c:"C", d:"D", e:"E", f:"F", g:"G", a:"A", b:"B" };
 
-const timbreNames = {piano:"钢琴", guitar:"吉他", electric:"电吉他", flute:"长笛", organ:"风琴", marimba:"木琴", strings:"弦乐", synth:"合成器"};
+const timbreNames = {piano:"钢琴(合成)", piano_sampled:"钢琴(采样)", guitar:"吉他(合成)", guitar_sampled:"吉他(采样)", electric:"电吉他(合成)", electric_sampled:"电吉他(采样)", flute:"长笛", organ:"风琴", marimba:"木琴", strings:"弦乐", synth:"合成器"};
 
 // Track held keys for S-modifier chord detection
 const heldKeys = new Set();
@@ -403,6 +576,27 @@ document.getElementById('startBtn').addEventListener('click', function() {
   this.disabled = true;
   this.textContent = '✓ 已启动';
   drawVisualizer();
+
+  // 后台加载采样乐器
+  const sfInstruments = [
+    { key: '_sfPiano',   inst: 'acoustic_grand_piano',   timbre: 'piano_sampled',    label: '🎹 钢琴(采样)' },
+    { key: '_sfGuitar',  inst: 'acoustic_guitar_nylon',  timbre: 'guitar_sampled',   label: '🎸 吉他(采样)' },
+    { key: '_sfElectric',inst: 'electric_guitar_clean',  timbre: 'electric_sampled', label: '⚡ 电吉他(采样)' },
+  ];
+  sfInstruments.forEach(({ key, inst, timbre, label }) => {
+    const btn = document.querySelector(`[data-timbre="${timbre}"]`);
+    if (btn) btn.textContent = label + ' …';
+    Soundfont.instrument(audioCtx, inst, {
+      soundfont: 'MusyngKite',
+      nameToUrl: (name, sf) =>
+        `https://gleitz.github.io/midi-js-soundfonts/${sf}/${name}-mp3.js`,
+    }).then(sf => {
+      window[key] = sf;
+      if (btn) btn.textContent = label + ' ✓';
+    }).catch(() => {
+      if (btn) btn.textContent = label + ' ✗';
+    });
+  });
 });
 
 // Octave buttons
@@ -458,6 +652,30 @@ function playNote(frequency, duration, volume) {
       gain.gain.exponentialRampToValueAtTime(volume * 0.3, now + 0.1);
       gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
       [osc1,osc2,osc3].forEach(o => { o.start(now); o.stop(now + duration); });
+      break;
+    }
+
+    case 'piano_sampled':
+    case 'guitar_sampled':
+    case 'electric_sampled': {
+      const sfMap = {
+        piano_sampled:    { key: '_sfPiano',   inst: 'acoustic_grand_piano' },
+        guitar_sampled:   { key: '_sfGuitar',  inst: 'acoustic_guitar_nylon' },
+        electric_sampled: { key: '_sfElectric',inst: 'electric_guitar_clean' },
+      };
+      const { key, inst } = sfMap[currentTimbre];
+      if (!window[key]) {
+        const prev = currentTimbre;
+        currentTimbre = 'piano';
+        playNote(frequency, duration, volume);
+        currentTimbre = prev;
+        return;
+      }
+      const midiNum = Math.round(69 + 12 * Math.log2(frequency / 440));
+      const noteNames3 = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+      const oct3 = Math.floor(midiNum / 12) - 1;
+      const noteName3 = noteNames3[midiNum % 12] + oct3;
+      window[key].play(noteName3, audioCtx.currentTime, { gain: volume * 2.5, duration });
       break;
     }
 
@@ -591,8 +809,10 @@ const pressedKeys = new Set();
 let sustain = false;
 
 document.addEventListener('keydown', e => {
+  if (listeningId) return; // settings is capturing
+
   // Sustain
-  if (e.code === 'Space') {
+  if (e.code === 'Space' || e.key === keyMap.fn_sustain) {
     e.preventDefault();
     if (!sustain) {
       sustain = true;
@@ -602,8 +822,8 @@ document.addEventListener('keydown', e => {
     return;
   }
 
-  // T = 鼓点循环切换 off→80→100→120→off
-  if (e.key === 't') {
+  // 鼓点循环切换
+  if (e.key === keyMap.fn_drum) {
     if (!audioCtx) return;
     drumBpmIdx = (drumBpmIdx + 1) % drumBpmOptions.length;
     if (drumBpm()) { drumBeat = 0; restartDrumLoop(); }
@@ -612,19 +832,19 @@ document.addEventListener('keydown', e => {
     return;
   }
 
-  // R = 切换鼓点节奏型
-  if (e.key === 'r') {
+  // 切换鼓点节奏型
+  if (e.key === keyMap.fn_drumPat) {
     patternIdx = (patternIdx + 1) % patterns.length;
     updateDrumDisplay();
     return;
   }
 
-  // Octave shift via . and ,
-  if (e.key === '.') { if (octaveShift < 2) { octaveShift++; updateOctaveDisplay(); } return; }
-  if (e.key === ',') { if (octaveShift > -2) { octaveShift--; updateOctaveDisplay(); } return; }
+  // Octave shift
+  if (e.key === keyMap.fn_octup) { if (octaveShift < 2) { octaveShift++; updateOctaveDisplay(); } return; }
+  if (e.key === keyMap.fn_octdn) { if (octaveShift > -2) { octaveShift--; updateOctaveDisplay(); } return; }
 
-  // S modifier → minor
-  if (e.key === 's') {
+  // minor modifier
+  if (e.key === keyMap.mod_minor) {
     if (!sHeld) {
       sHeld = true;
       if (currentChord) {
@@ -639,8 +859,8 @@ document.addEventListener('keydown', e => {
     return;
   }
 
-  // Q modifier → dom7
-  if (e.key === 'q') {
+  // dom7 modifier
+  if (e.key === keyMap.mod_dom7) {
     e.preventDefault();
     if (!altHeld) {
       altHeld = true;
@@ -659,30 +879,31 @@ document.addEventListener('keydown', e => {
   heldKeys.add(e.key);
 
   // Left hand chord keys
-  if (chordRoots[e.key] && e.key !== 's') {
+  if (chordRoots[e.key] && e.key !== keyMap.mod_minor) {
     if (pressedKeys.has(e.key)) return;
     pressedKeys.add(e.key);
     const quality = altHeld ? 'dom7' : sHeld ? 'minor' : 'major';
     const root = chordRoots[e.key];
     currentChord = makeChord(root, quality);
     document.getElementById('chordDisplay').textContent = currentChord.name;
-    // update UI label
     chordKeys.forEach(k => {
       const q = altHeld ? 'dom7' : sHeld ? 'minor' : 'major';
       document.getElementById('chord-name-'+k).textContent = makeChord(chordRoots[k], q).name;
     });
     document.querySelectorAll('.chord-key').forEach(el => el.classList.remove('pressed'));
-    document.getElementById('chord-'+e.key).classList.add('pressed');
+    // find which note this key maps to for UI id
+    const noteForKey = ['c','d','e','f','g','a','b'].find(n => keyMap['chord_'+n] === e.key);
+    if (noteForKey) document.getElementById('chord-'+noteForKey).classList.add('pressed');
     const bFreq = bassFreq(baseFreqs[root]);
     const dur = sustain ? 4.0 : 1.2;
     playNote(bFreq, dur, 0.55);
     return;
   }
 
-  // M = 扫弦：当前和弦所有音同时发声
-  if (e.key === 'm') {
-    if (!currentChord || pressedKeys.has('m')) return;
-    pressedKeys.add('m');
+  // 扫弦
+  if (e.key === keyMap.mod_strum) {
+    if (!currentChord || pressedKeys.has(keyMap.mod_strum)) return;
+    pressedKeys.add(keyMap.mod_strum);
     const melDur = sustain ? 3.5 : 0.8;
     currentChord.tones.forEach((n, idx) => {
       const f = baseFreqs[n] * Math.pow(2, octaveShift);
@@ -692,34 +913,41 @@ document.addEventListener('keydown', e => {
   }
 
   // Right hand melody
-  if (rightKeys[e.key] && currentChord) {
+  if (rightKeys[e.key]) {
     if (pressedKeys.has(e.key)) return;
     pressedKeys.add(e.key);
     const noteName = rightKeys[e.key];
-    const snapped = currentChord.snap[noteName];
     const el = getMelodyEl(e.key);
     if (el) el.classList.add('pressed');
     const melDur = sustain ? 3.5 : 0.8;
-    snapped.forEach(n => {
-      let f;
-      if (n.endsWith('_hi')) {
-        f = baseFreqs[n.replace('_hi','')] * Math.pow(2, octaveShift + 1);
-      } else {
-        f = baseFreqs[n] * Math.pow(2, octaveShift);
-      }
+
+    // 左手有和弦 → 吸附；没有 → 直接发原音
+    if (currentChord) {
+      const snapped = currentChord.snap[noteName];
+      snapped.forEach(n => {
+        const f = n.endsWith('_hi')
+          ? baseFreqs[n.replace('_hi','')] * Math.pow(2, octaveShift + 1)
+          : baseFreqs[n] * Math.pow(2, octaveShift);
+        playNote(f, melDur, 0.45);
+      });
+    } else {
+      // 无和弦，直接发原音
+      const f = noteName === 'C_hi'
+        ? baseFreqs['C'] * Math.pow(2, octaveShift + 1)
+        : baseFreqs[noteName] * Math.pow(2, octaveShift);
       playNote(f, melDur, 0.45);
-    });
+    }
   }
 });
 
 document.addEventListener('keyup', e => {
-  if (e.code === 'Space') {
+  if (e.code === 'Space' || e.key === keyMap.fn_sustain) {
     sustain = false;
     const si = document.getElementById('sustainIndicator');
     si.textContent = 'OFF'; si.classList.remove('on');
     return;
   }
-  if (e.key === 's') {
+  if (e.key === keyMap.mod_minor) {
     sHeld = false;
     if (currentChord) {
       const root = currentChord.bassNote;
@@ -731,7 +959,7 @@ document.addEventListener('keyup', e => {
     });
     return;
   }
-  if (e.key === 'q') {
+  if (e.key === keyMap.mod_dom7) {
     altHeld = false;
     if (currentChord) {
       const root = currentChord.bassNote;
@@ -745,12 +973,212 @@ document.addEventListener('keyup', e => {
   }
   heldKeys.delete(e.key);
   pressedKeys.delete(e.key);
-  if (e.key === 'm') return;
-  if (chordRoots[e.key]) document.getElementById('chord-'+e.key)?.classList.remove('pressed');
+  if (e.key === keyMap.mod_strum) return;
+  if (chordRoots[e.key]) {
+    const noteForKey = ['c','d','e','f','g','a','b'].find(n => keyMap['chord_'+n] === e.key);
+    if (noteForKey) document.getElementById('chord-'+noteForKey)?.classList.remove('pressed');
+    currentChord = null;
+    document.getElementById('chordDisplay').textContent = '—';
+  }
   if (rightKeys[e.key]) getMelodyEl(e.key)?.classList.remove('pressed');
 });
 
-// ---- Drum Engine ----
+// ---- Settings / Key Remapping ----
+
+const defaultKeyMap = {
+  // chord roots: key → root note
+  chord_c: 'c', chord_d: 'd', chord_e: 'e', chord_f: 'f',
+  chord_g: 'g', chord_a: 'a', chord_b: 'b',
+  // modifiers
+  mod_minor: 's', mod_dom7: 'q', mod_strum: 'm',
+  // right hand white
+  rh_C: 'h', rh_D: 'j', rh_E: 'k', rh_F: 'l',
+  rh_G: ';', rh_A: "'", rh_B: 'Enter',
+  // right hand black
+  rh_Cs: 'u', rh_Ds: 'i', rh_Fs: 'p', rh_Gs: '[', rh_As: ']',
+  // high C
+  rh_C_hi: 'o',
+  // function keys
+  fn_sustain: ' ', fn_octup: '.', fn_octdn: ',',
+  fn_drum: 't', fn_drumPat: 'r',
+};
+
+let keyMap = JSON.parse(localStorage.getItem('pianoKeyMap') || 'null') || {...defaultKeyMap};
+
+// Apply keyMap to live data structures
+function applyKeyMap() {
+  // chord roots
+  Object.keys(chordRoots).forEach(k => delete chordRoots[k]);
+  ['c','d','e','f','g','a','b'].forEach(note => {
+    chordRoots[keyMap['chord_'+note]] = note.toUpperCase();
+  });
+
+  // right hand
+  Object.keys(rightKeys).forEach(k => delete rightKeys[k]);
+  const rhMap = {
+    rh_C:'C', rh_D:'D', rh_E:'E', rh_F:'F', rh_G:'G', rh_A:'A', rh_B:'B',
+    rh_Cs:'Cs', rh_Ds:'Ds', rh_Fs:'Fs', rh_Gs:'Gs', rh_As:'As',
+    rh_C_hi:'C_hi'
+  };
+  Object.entries(rhMap).forEach(([id, note]) => {
+    rightKeys[keyMap[id]] = note;
+  });
+}
+
+applyKeyMap();
+
+// Settings UI
+const keyLabels = {
+  chord_c:'和弦 C', chord_d:'和弦 D', chord_e:'和弦 E', chord_f:'和弦 F',
+  chord_g:'和弦 G', chord_a:'和弦 A', chord_b:'和弦 B',
+  mod_minor:'小和弦', mod_dom7:'属七', mod_strum:'扫弦',
+  rh_C:'Do', rh_D:'Re', rh_E:'Mi', rh_F:'Fa',
+  rh_G:'So', rh_A:'La', rh_B:'Xi',
+  rh_Cs:'#Do', rh_Ds:'#Re', rh_Fs:'#Fa', rh_Gs:'#So', rh_As:'#La',
+  rh_C_hi:'高音Do',
+  fn_sustain:'延音', fn_octup:'升八度', fn_octdn:'降八度',
+  fn_drum:'鼓点速度', fn_drumPat:'鼓型切换',
+};
+const sectionMap = {
+  chord_c:'chordKeyMap', chord_d:'chordKeyMap', chord_e:'chordKeyMap',
+  chord_f:'chordKeyMap', chord_g:'chordKeyMap', chord_a:'chordKeyMap', chord_b:'chordKeyMap',
+  mod_minor:'modKeyMap', mod_dom7:'modKeyMap', mod_strum:'modKeyMap',
+  rh_C:'whiteKeyMap', rh_D:'whiteKeyMap', rh_E:'whiteKeyMap', rh_F:'whiteKeyMap',
+  rh_G:'whiteKeyMap', rh_A:'whiteKeyMap', rh_B:'whiteKeyMap',
+  rh_Cs:'blackKeyMap', rh_Ds:'blackKeyMap', rh_Fs:'blackKeyMap',
+  rh_Gs:'blackKeyMap', rh_As:'blackKeyMap', rh_C_hi:'blackKeyMap',
+  fn_sustain:'funcKeyMap', fn_octup:'funcKeyMap', fn_octdn:'funcKeyMap',
+  fn_drum:'funcKeyMap', fn_drumPat:'funcKeyMap',
+};
+
+let listeningId = null; // which key id is currently being remapped
+
+function displayKey(k) {
+  if (k === ' ') return 'Space';
+  if (k === 'Enter') return '↵';
+  if (k === "'") return "'";
+  return k;
+}
+
+function buildSettingsUI() {
+  // clear sections
+  ['chordKeyMap','modKeyMap','whiteKeyMap','blackKeyMap','funcKeyMap'].forEach(id => {
+    document.getElementById(id).innerHTML = '';
+  });
+  Object.entries(keyLabels).forEach(([id, label]) => {
+    const section = document.getElementById(sectionMap[id]);
+    const item = document.createElement('div');
+    item.className = 'key-map-item';
+    item.innerHTML = `<span class="km-label">${label}</span>
+      <div class="km-key" data-id="${id}">${displayKey(keyMap[id])}</div>`;
+    section.appendChild(item);
+  });
+
+  // click to remap
+  document.querySelectorAll('.km-key').forEach(el => {
+    el.addEventListener('click', () => {
+      // cancel previous
+      document.querySelectorAll('.km-key.listening').forEach(e => e.classList.remove('listening'));
+      listeningId = el.dataset.id;
+      el.classList.add('listening');
+      el.textContent = '…';
+    });
+  });
+}
+
+// Capture key for remapping
+document.addEventListener('keydown', e => {
+  if (!listeningId) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const newKey = e.key;
+  // check for conflicts
+  const conflict = Object.entries(keyMap).find(([id, k]) => k === newKey && id !== listeningId);
+  const el = document.querySelector(`.km-key[data-id="${listeningId}"]`);
+
+  if (conflict) {
+    el.textContent = '冲突!';
+    el.style.color = '#e87e7e';
+    setTimeout(() => {
+      el.textContent = displayKey(keyMap[listeningId]);
+      el.style.color = '';
+      el.classList.remove('listening');
+      listeningId = null;
+    }, 900);
+    return;
+  }
+
+  keyMap[listeningId] = newKey;
+  el.textContent = displayKey(newKey);
+  el.classList.remove('listening');
+  listeningId = null;
+}, true); // capture phase so it fires before main keydown
+
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  buildSettingsUI();
+  document.getElementById('settingsOverlay').classList.add('open');
+});
+document.getElementById('settingsClose').addEventListener('click', () => {
+  listeningId = null;
+  document.getElementById('settingsOverlay').classList.remove('open');
+});
+document.getElementById('settingsOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('settingsOverlay')) {
+    listeningId = null;
+    document.getElementById('settingsOverlay').classList.remove('open');
+  }
+});
+document.getElementById('settingsSave').addEventListener('click', () => {
+  localStorage.setItem('pianoKeyMap', JSON.stringify(keyMap));
+  applyKeyMap();
+  rebuildPlayUI();
+  listeningId = null;
+  document.getElementById('settingsOverlay').classList.remove('open');
+});
+document.getElementById('settingsReset').addEventListener('click', () => {
+  keyMap = {...defaultKeyMap};
+  buildSettingsUI();
+});
+
+function rebuildPlayUI() {
+  // Rebuild chord grid
+  chordGrid.innerHTML = '';
+  const roots = ['c','d','e','f','g','a','b'];
+  roots.forEach(note => {
+    const k = keyMap['chord_'+note];
+    const el = document.createElement('div');
+    el.className = 'chord-key';
+    el.id = 'chord-'+note;
+    el.innerHTML = `<span class="key-label">${displayKey(k)}</span><span class="chord-name" id="chord-name-${note}">${note.toUpperCase()}</span>`;
+    chordGrid.appendChild(el);
+  });
+  // Rebuild melody grid
+  melodyGrid.innerHTML = '';
+  const melodyDefs = [
+    {id:'rh_C',label:'Do'},{id:'rh_D',label:'Re'},{id:'rh_E',label:'Mi'},
+    {id:'rh_F',label:'Fa'},{id:'rh_G',label:'So'},{id:'rh_A',label:'La'},
+    {id:'rh_B',label:'Xi'},{id:'rh_Cs',label:'#Do',black:true},
+    {id:'rh_Ds',label:'#Re',black:true},{id:'rh_Fs',label:'#Fa',black:true},
+    {id:'rh_Gs',label:'#So',black:true},{id:'rh_As',label:'#La',black:true},
+    {id:'rh_C_hi',label:'Do↑'},
+  ];
+  melodyDefs.forEach(({id, label, black}) => {
+    const k = keyMap[id];
+    const noteVal = {rh_C:'C',rh_D:'D',rh_E:'E',rh_F:'F',rh_G:'G',rh_A:'A',rh_B:'B',
+      rh_Cs:'Cs',rh_Ds:'Ds',rh_Fs:'Fs',rh_Gs:'Gs',rh_As:'As',rh_C_hi:'C_hi'}[id];
+    const el = document.createElement('div');
+    el.className = 'melody-key' + (black ? ' black-key' : '');
+    el.id = 'melody-'+k.replace(/[^a-zA-Z0-9]/g, c => c.charCodeAt(0));
+    el.innerHTML = `<span class="key-label">${displayKey(k)}</span><span class="note-name">${label}</span>`;
+    melodyGrid.appendChild(el);
+  });
+}
+
+// Also remap mod keys by reading from keyMap at event time
+// (handled dynamically in keydown via keyMap lookups below)
+
+// ---- Visualizer
 const drumBpmOptions = [0, 80, 100, 120]; // 0 = off
 let drumBpmIdx = 0;
 let drumIntervalId = null;
