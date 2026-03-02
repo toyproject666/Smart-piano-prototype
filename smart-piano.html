@@ -406,17 +406,13 @@
 
 <!-- Timbre selector -->
 <div class="timbre-bar" id="timbreBar">
-  <button class="timbre-btn active" data-timbre="piano">🎹 钢琴(合成)</button>
-  <button class="timbre-btn" data-timbre="piano_sampled">🎹 钢琴(采样)</button>
-  <button class="timbre-btn" data-timbre="guitar">🎸 吉他(合成)</button>
-  <button class="timbre-btn" data-timbre="guitar_sampled">🎸 吉他(采样)</button>
-  <button class="timbre-btn" data-timbre="electric">⚡ 电吉他(合成)</button>
-  <button class="timbre-btn" data-timbre="electric_sampled">⚡ 电吉他(采样)</button>
-  <button class="timbre-btn" data-timbre="electric">⚡ 电吉他</button>
-  <button class="timbre-btn" data-timbre="flute">🎵 长笛</button>
-  <button class="timbre-btn" data-timbre="organ">🎺 风琴</button>
-  <button class="timbre-btn" data-timbre="marimba">🪘 木琴</button>
-  <button class="timbre-btn" data-timbre="strings">🎻 弦乐</button>
+  <button class="timbre-btn active" data-timbre="piano_sampled">🎹 钢琴</button>
+  <button class="timbre-btn" data-timbre="guitar_sampled">🎸 吉他</button>
+  <button class="timbre-btn" data-timbre="electric_sampled">⚡ 电吉他</button>
+  <button class="timbre-btn" data-timbre="flute_sampled">🎵 长笛</button>
+  <button class="timbre-btn" data-timbre="organ_sampled">🎺 风琴</button>
+  <button class="timbre-btn" data-timbre="marimba_sampled">🪘 木琴</button>
+  <button class="timbre-btn" data-timbre="strings_sampled">🎻 弦乐</button>
   <button class="timbre-btn" data-timbre="synth">🌀 合成器</button>
 </div>
 
@@ -453,7 +449,7 @@
 let audioCtx;
 let analyser, analyserData;
 let currentChord = null;
-let currentTimbre = 'piano';
+let currentTimbre = 'piano_sampled';
 let octaveShift = 0; // -1, 0, +1
 
 // Full note frequency table (octave 0 = middle octave base)
@@ -527,7 +523,7 @@ function makeChord(root, quality) {
 // Keys: c, d, e, f, g, a, b  (+ s held = minor)
 const chordRoots = { c:"C", d:"D", e:"E", f:"F", g:"G", a:"A", b:"B" };
 
-const timbreNames = {piano:"钢琴(合成)", piano_sampled:"钢琴(采样)", guitar:"吉他(合成)", guitar_sampled:"吉他(采样)", electric:"电吉他(合成)", electric_sampled:"电吉他(采样)", flute:"长笛", organ:"风琴", marimba:"木琴", strings:"弦乐", synth:"合成器"};
+const timbreNames = {piano_sampled:"钢琴", guitar_sampled:"吉他", electric_sampled:"电吉他", flute_sampled:"长笛", organ_sampled:"风琴", marimba_sampled:"木琴", strings_sampled:"弦乐", synth:"合成器"};
 
 // Track held keys for S-modifier chord detection
 const heldKeys = new Set();
@@ -579,9 +575,13 @@ document.getElementById('startBtn').addEventListener('click', function() {
 
   // 后台加载采样乐器
   const sfInstruments = [
-    { key: '_sfPiano',   inst: 'acoustic_grand_piano',   timbre: 'piano_sampled',    label: '🎹 钢琴(采样)' },
-    { key: '_sfGuitar',  inst: 'acoustic_guitar_nylon',  timbre: 'guitar_sampled',   label: '🎸 吉他(采样)' },
-    { key: '_sfElectric',inst: 'electric_guitar_clean',  timbre: 'electric_sampled', label: '⚡ 电吉他(采样)' },
+    { key: '_sfPiano',   inst: 'acoustic_grand_piano',   timbre: 'piano_sampled',   label: '🎹 钢琴' },
+    { key: '_sfGuitar',  inst: 'acoustic_guitar_nylon',  timbre: 'guitar_sampled',  label: '🎸 吉他' },
+    { key: '_sfElectric',inst: 'electric_guitar_clean',  timbre: 'electric_sampled',label: '⚡ 电吉他' },
+    { key: '_sfFlute',   inst: 'flute',                  timbre: 'flute_sampled',   label: '🎵 长笛' },
+    { key: '_sfOrgan',   inst: 'rock_organ',             timbre: 'organ_sampled',   label: '🎺 风琴' },
+    { key: '_sfMarimba', inst: 'marimba',                timbre: 'marimba_sampled', label: '🪘 木琴' },
+    { key: '_sfStrings', inst: 'string_ensemble_1',      timbre: 'strings_sampled', label: '🎻 弦乐' },
   ];
   sfInstruments.forEach(({ key, inst, timbre, label }) => {
     const btn = document.querySelector(`[data-timbre="${timbre}"]`);
@@ -657,16 +657,24 @@ function playNote(frequency, duration, volume) {
 
     case 'piano_sampled':
     case 'guitar_sampled':
-    case 'electric_sampled': {
+    case 'electric_sampled':
+    case 'flute_sampled':
+    case 'organ_sampled':
+    case 'marimba_sampled':
+    case 'strings_sampled': {
       const sfMap = {
-        piano_sampled:    { key: '_sfPiano',   inst: 'acoustic_grand_piano' },
-        guitar_sampled:   { key: '_sfGuitar',  inst: 'acoustic_guitar_nylon' },
-        electric_sampled: { key: '_sfElectric',inst: 'electric_guitar_clean' },
+        piano_sampled:   { key: '_sfPiano',   inst: 'acoustic_grand_piano' },
+        guitar_sampled:  { key: '_sfGuitar',  inst: 'acoustic_guitar_nylon' },
+        electric_sampled:{ key: '_sfElectric',inst: 'electric_guitar_clean' },
+        flute_sampled:   { key: '_sfFlute',   inst: 'flute' },
+        organ_sampled:   { key: '_sfOrgan',   inst: 'rock_organ' },
+        marimba_sampled: { key: '_sfMarimba', inst: 'marimba' },
+        strings_sampled: { key: '_sfStrings', inst: 'string_ensemble_1' },
       };
       const { key, inst } = sfMap[currentTimbre];
       if (!window[key]) {
         const prev = currentTimbre;
-        currentTimbre = 'piano';
+        currentTimbre = 'synth';
         playNote(frequency, duration, volume);
         currentTimbre = prev;
         return;
