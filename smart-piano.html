@@ -87,7 +87,7 @@
     }
     .chord-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(7, 1fr);
       gap: 8px;
     }
     .chord-key {
@@ -121,8 +121,17 @@
     /* Melody panel */
     .melody-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(7, 1fr);
       gap: 8px;
+    }
+    .melody-key.black-key {
+      background: #111118;
+      border-color: #444;
+    }
+    .melody-key.black-key .note-name { color: var(--accent3); }
+    .melody-key.black-key.pressed {
+      background: var(--accent3);
+      border-color: var(--accent3);
     }
     .melody-key {
       background: #1e1e26;
@@ -189,6 +198,26 @@
     #startBtn:hover { opacity: 0.85; }
     #startBtn:disabled { opacity: 0.3; cursor: default; }
 
+    .octave-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+    }
+    .octave-btn {
+      background: var(--panel);
+      border: 1.5px solid var(--border);
+      color: var(--text);
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .octave-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+    #octaveDisplay { color: var(--accent2); min-width: 24px; text-align: center; }
     #sustainIndicator { color: var(--muted); transition: color 0.1s; }
     #sustainIndicator.on { color: #7ee8b8; }
     .hint {
@@ -217,6 +246,12 @@
   <button class="timbre-btn" data-timbre="synth">🌀 合成器</button>
 </div>
 
+<div class="octave-bar">
+  <button class="octave-btn" id="octaveDown">,</button>
+  <span>八度 <span id="octaveDisplay">0</span></span>
+  <button class="octave-btn" id="octaveUp">.</button>
+</div>
+
 <canvas id="visualizer"></canvas>
 
 <div class="main-layout">
@@ -235,8 +270,9 @@
 <div class="status-bar" id="statusBar">和弦: <span id="chordDisplay">—</span> &nbsp;|&nbsp; 音色: <span id="timbreDisplay">钢琴</span> &nbsp;|&nbsp; 延音: <span id="sustainIndicator">OFF</span></div>
 
 <div class="hint">
-  左手 A S D F Q W E 切换和弦 (C Dm Em F G Am Bdim) &nbsp;·&nbsp; 右手 J K L ; U I O P 弹奏旋律<br>
-  空格键 按住延音 &nbsp;·&nbsp; 点击上方按钮切换音色
+  左手 C D E F G A B = 大和弦 &nbsp;·&nbsp; S = 小和弦 &nbsp;·&nbsp; Q = 属七 &nbsp;·&nbsp; M = 扫弦<br>
+  右手白键 H J K L ; ' ↵ = Do Re Mi Fa So La Xi &nbsp;·&nbsp; 黑键 U I P [ ] = #Do #Re #Fa #So #La &nbsp;·&nbsp; O = 高音Do<br>
+  空格 = 延音 &nbsp;·&nbsp; 按钮 . / , = 升/降八度
 </div>
 
 <script>
@@ -244,61 +280,118 @@ let audioCtx;
 let analyser, analyserData;
 let currentChord = null;
 let currentTimbre = 'piano';
+let octaveShift = 0; // -1, 0, +1
 
-// noteTable kept for reference (noteTableExt used for playback)
-
-// rightKeys: J K L ; U I O P  →  C D E F G A B 高C
-const rightKeys = { j:"C", k:"D", l:"E", ";":"F", u:"G", i:"A", o:"B", p:"C2" };
-
-// noteTable extended with high C
-const noteTableExt = { 
-  C:261.63, D:293.66, E:329.63, F:349.23, G:392.00, A:440.00, B:493.88,
-  C2:523.25, D2:587.33, E2:659.25, F2:698.46, G2:783.99, A2:880.00, B2:987.77
+// Full note frequency table (octave 0 = middle octave base)
+// We store base frequencies and apply octaveShift multiplier at play time
+const baseFreqs = {
+  C:261.63, Cs:277.18, D:293.66, Ds:311.13,
+  E:329.63, F:349.23, Fs:369.99, G:392.00,
+  Gs:415.30, A:440.00, As:466.16, B:493.88
 };
 
-// ASDFQWE → chords for C D E F G A B scale degrees
-// A=C大调, S=D小调, D=E小调, F=F大调, Q=G大调, W=A小调, E=B减
-const chords = {
-  // C2 snap = 高八度吸附到和弦最近音 (用 2 后缀表示高八度)
-  // C和弦音: C E G  → C2吸附C2
-  // Dm和弦音: D F A → C2吸附D2
-  // Em和弦音: E G B → C2吸附B2(最近) 或 E2，取B2
-  // F和弦音:  F A C → C2吸附C2
-  // G和弦音:  G B D → C2吸附B2(最近)
-  // Am和弦音: A C E → C2吸附C2
-  // Bdim和弦音: B D F → C2吸附B2(最近)
-  a:{name:"C",   bass:130.81, snap:{C:["C"],D:["C","E"],E:["E"],F:["E","G"],G:["G"],A:["G","C"],B:["C"],   C2:["C2"]}},
-  s:{name:"Dm",  bass:73.42,  snap:{C:["D"],D:["D"],E:["D","F"],F:["F"],G:["F","A"],A:["A"],B:["A"],       C2:["D2"]}},
-  d:{name:"Em",  bass:82.41,  snap:{C:["B"],D:["E"],E:["E"],F:["E","G"],G:["G"],A:["G","B"],B:["B"],       C2:["B2"]}},
-  f:{name:"F",   bass:87.31,  snap:{C:["C"],D:["C","F"],E:["F"],F:["F"],G:["F","A"],A:["A"],B:["A","C"],   C2:["C2"]}},
-  q:{name:"G",   bass:98.00,  snap:{C:["B","D"],D:["D"],E:["D","G"],F:["G"],G:["G"],A:["G","B"],B:["B"],   C2:["B2"]}},
-  w:{name:"Am",  bass:110.00, snap:{C:["D"],D:["D"],E:["D","F"],F:["F"],G:["F","A"],A:["A"],B:["A","C"],   C2:["C2"]}},
-  e:{name:"Bdim",bass:123.47, snap:{C:["B"],D:["D","F"],E:["E"],F:["D","F"],G:["F","B"],A:["A"],B:["B"],   C2:["B2"]}}
+function freq(note) {
+  return baseFreqs[note] * Math.pow(2, octaveShift);
+}
+function bassFreq(f) {
+  // bass always one octave below current octave
+  return f * Math.pow(2, octaveShift - 1);
+}
+
+// Right hand key → note name
+// White keys: H J K L ; ' Enter
+// Black keys: U I P [ ]
+// High C: O
+const rightKeys = {
+  h:"C", j:"D", k:"E", l:"F", ";":"G", "'":"A", "Enter":"B",
+  u:"Cs", i:"Ds", p:"Fs", "[":"Gs", "]":"As",
+  o:"C_hi"  // high C = one octave above current
 };
+
+// Chord definitions: major & minor for each root
+// snap: for each white+black note, which chord tones to snap to
+// We define snap in terms of scale-degree names, resolve at play time
+function makeChord(root, quality) {
+  // intervals in semitones
+  const intervals = quality === 'major' ? [0,4,7] : quality === 'minor' ? [0,3,7] : quality === 'dom7' ? [0,4,7,10] : [0,3,6];
+  const noteNames = Object.keys(baseFreqs);
+  const rootIdx = noteNames.indexOf(root);
+  const tones = intervals.map(i => noteNames[(rootIdx + i) % 12]);
+  // snap: for every playable note, find closest chord tone
+  const allPlayable = ["C","Cs","D","Ds","E","F","Fs","G","Gs","A","As","B","C_hi"];
+  const snap = {};
+  allPlayable.forEach(note => {
+    const n = note === "C_hi" ? "C" : note;
+    const nIdx = noteNames.indexOf(n);
+    let bestDist = 99;
+    tones.forEach(t => {
+      const tIdx = noteNames.indexOf(t);
+      const dist = Math.min(Math.abs(tIdx - nIdx), 12 - Math.abs(tIdx - nIdx));
+      if (dist < bestDist) bestDist = dist;
+    });
+    const best = tones.filter(t => {
+      const tIdx = noteNames.indexOf(t);
+      const dist = Math.min(Math.abs(tIdx - nIdx), 12 - Math.abs(tIdx - nIdx));
+      return dist === bestDist;
+    });
+    if (note === "C_hi") {
+      snap[note] = best.map(t => t + "_hi");
+    } else {
+      snap[note] = best;
+    }
+  });
+  const bassNote = root;
+  const name = root + (quality === 'major' ? '' : quality === 'minor' ? 'm' : quality === 'dom7' ? '7' : 'dim');
+  return { name, tones, snap, bassNote };
+}
+
+// Left hand chord keys: A B C D E F G (major) + S modifier = minor
+// Key mapping: a=C, b=... wait, use letter keys for roots
+// a=C, z=D, x=E, c=F, v=G, b=A, n=B  -- but user said C->C key etc
+// User specified: C key -> C chord, D key -> D chord ... 
+// But C/D/E/F/G/A/B are also used by OS or other things — use lowercase
+// Keys: c, d, e, f, g, a, b  (+ s held = minor)
+const chordRoots = { c:"C", d:"D", e:"E", f:"F", g:"G", a:"A", b:"B" };
 
 const timbreNames = {piano:"钢琴", guitar:"吉他", electric:"电吉他", flute:"长笛", organ:"风琴", marimba:"木琴", strings:"弦乐", synth:"合成器"};
 
-// Build UI
-const chordOrder = ['a','s','d','f','q','w','e'];
+// Track held keys for S-modifier chord detection
+const heldKeys = new Set();
+let sHeld = false;
+let altHeld = false;
+
+// Build chord UI
+const chordKeys = ['c','d','e','f','g','a','b'];
 const chordGrid = document.getElementById('chordGrid');
-chordOrder.forEach(k => {
+chordKeys.forEach(k => {
+  const maj = makeChord(chordRoots[k], 'major');
+  const min = makeChord(chordRoots[k], 'minor');
   const el = document.createElement('div');
   el.className = 'chord-key';
   el.id = 'chord-'+k;
-  el.innerHTML = `<span class="key-label">${k.toUpperCase()}</span><span class="chord-name">${chords[k].name}</span>`;
+  el.innerHTML = `<span class="key-label">${k.toUpperCase()}</span><span class="chord-name" id="chord-name-${k}">${maj.name}</span>`;
   chordGrid.appendChild(el);
 });
 
-const noteDisplayNames = { j:"C", k:"D", l:"E", ";":"F", u:"G", i:"A", o:"B", p:"C↑" };
-const melodyKeyOrder = ['j','k','l',';','u','i','o','p'];
+// Build melody UI
+const melodyKeyOrder = ['h','j','k','l',';',"'",'Enter','u','i','p','[',']','o'];
+const melodyDisplayNames = {
+  h:"Do", j:"Re", k:"Mi", l:"Fa", ";":"So", "'":"La", "Enter":"Xi",
+  u:"#Do", i:"#Re", p:"#Fa", "[":"#So", "]":"#La",
+  o:"Do↑"
+};
 const melodyGrid = document.getElementById('melodyGrid');
 melodyKeyOrder.forEach(k => {
   const el = document.createElement('div');
-  el.className = 'melody-key';
-  el.id = 'melody-'+k;
-  el.innerHTML = `<span class="key-label">${k === ';' ? ';' : k.toUpperCase()}</span><span class="note-name">${noteDisplayNames[k]}</span>`;
+  el.className = 'melody-key' + (["u","i","p","[","]"].includes(k) ? " black-key" : "");
+  el.id = 'melody-'+k.replace(/[^a-zA-Z0-9]/g, c => c.charCodeAt(0));
+  el.innerHTML = `<span class="key-label">${k === 'Enter' ? '↵' : k}</span><span class="note-name">${melodyDisplayNames[k]}</span>`;
   melodyGrid.appendChild(el);
 });
+
+function getMelodyEl(k) {
+  return document.getElementById('melody-'+k.replace(/[^a-zA-Z0-9]/g, c => c.charCodeAt(0)));
+}
 
 document.getElementById('startBtn').addEventListener('click', function() {
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -311,6 +404,18 @@ document.getElementById('startBtn').addEventListener('click', function() {
   drawVisualizer();
 });
 
+// Octave buttons
+document.getElementById('octaveUp').addEventListener('click', () => {
+  if (octaveShift < 2) { octaveShift++; updateOctaveDisplay(); }
+});
+document.getElementById('octaveDown').addEventListener('click', () => {
+  if (octaveShift > -2) { octaveShift--; updateOctaveDisplay(); }
+});
+function updateOctaveDisplay() {
+  const s = octaveShift > 0 ? '+'+octaveShift : octaveShift === 0 ? '0' : String(octaveShift);
+  document.getElementById('octaveDisplay').textContent = s;
+}
+
 // Timbre buttons
 document.getElementById('timbreBar').addEventListener('click', e => {
   const btn = e.target.closest('.timbre-btn');
@@ -322,15 +427,15 @@ document.getElementById('timbreBar').addEventListener('click', e => {
 });
 
 // ---- Sound synthesis per timbre ----
-function createOscWithType(freq, type, detune=0) {
+function createOscWithType(f, type, detune=0) {
   const osc = audioCtx.createOscillator();
-  osc.frequency.value = freq;
+  osc.frequency.value = f;
   osc.type = type;
   osc.detune.value = detune;
   return osc;
 }
 
-function playNote(freq, duration, volume) {
+function playNote(frequency, duration, volume) {
   if (!audioCtx) return;
   const out = analyser;
   const now = audioCtx.currentTime;
@@ -338,12 +443,11 @@ function playNote(freq, duration, volume) {
   switch(currentTimbre) {
 
     case 'piano': {
-      // Piano: fast attack, exponential decay, sine + triangle blend + harmonic
       const gain = audioCtx.createGain();
       gain.connect(out);
-      const osc1 = createOscWithType(freq, 'sine');
-      const osc2 = createOscWithType(freq * 2, 'sine');
-      const osc3 = createOscWithType(freq * 3, 'triangle');
+      const osc1 = createOscWithType(frequency, 'sine');
+      const osc2 = createOscWithType(frequency * 2, 'sine');
+      const osc3 = createOscWithType(frequency * 3, 'triangle');
       const g1 = audioCtx.createGain(); g1.gain.value = 0.5;
       const g2 = audioCtx.createGain(); g2.gain.value = 0.2;
       const g3 = audioCtx.createGain(); g3.gain.value = 0.07;
@@ -357,20 +461,15 @@ function playNote(freq, duration, volume) {
     }
 
     case 'guitar': {
-      // Karplus-Strong inspired: noise burst → lowpass → quick decay
       const gain = audioCtx.createGain();
       gain.connect(out);
       const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
       const src = audioCtx.createBufferSource();
-      src.buffer = buf;
-      src.loop = true;
-      src.loopStart = 0; src.loopEnd = 1 / freq;
-      // lowpass to smooth it
-      const lp = audioCtx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = freq * 4;
+      src.buffer = buf; src.loop = true;
+      src.loopStart = 0; src.loopEnd = 1 / frequency;
+      const lp = audioCtx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = frequency * 4;
       src.connect(lp); lp.connect(gain);
       gain.gain.setValueAtTime(volume * 0.9, now);
       gain.gain.exponentialRampToValueAtTime(volume * 0.4, now + 0.08);
@@ -380,16 +479,13 @@ function playNote(freq, duration, volume) {
     }
 
     case 'electric': {
-      // Electric guitar: sawtooth + distortion-like waveshaper
       const gain = audioCtx.createGain();
       const ws = audioCtx.createWaveShaper();
       const curve = new Float32Array(256);
       for (let i = 0; i < 256; i++) { const x = (i*2/255)-1; curve[i] = (Math.PI+300)*x/(Math.PI+300*Math.abs(x)); }
-      ws.curve = curve;
-      ws.connect(out);
-      gain.connect(ws);
-      const osc = createOscWithType(freq, 'sawtooth');
-      const osc2 = createOscWithType(freq, 'sawtooth', 6);
+      ws.curve = curve; ws.connect(out); gain.connect(ws);
+      const osc = createOscWithType(frequency, 'sawtooth');
+      const osc2 = createOscWithType(frequency, 'sawtooth', 6);
       const g2 = audioCtx.createGain(); g2.gain.value = 0.5;
       osc.connect(gain); osc2.connect(g2); g2.connect(gain);
       gain.gain.setValueAtTime(volume * 0.4, now);
@@ -400,22 +496,17 @@ function playNote(freq, duration, volume) {
     }
 
     case 'flute': {
-      // Flute: sine + slight noise + vibrato
-      const gain = audioCtx.createGain();
-      gain.connect(out);
-      const osc = createOscWithType(freq, 'sine');
-      // vibrato LFO
+      const gain = audioCtx.createGain(); gain.connect(out);
+      const osc = createOscWithType(frequency, 'sine');
       const lfo = audioCtx.createOscillator(); lfo.frequency.value = 5;
       const lfoGain = audioCtx.createGain(); lfoGain.gain.value = 4;
       lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
-      // noise layer
       const noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
       const nd = noiseBuf.getChannelData(0);
       for (let i=0;i<nd.length;i++) nd[i] = (Math.random()*2-1)*0.05;
       const noise = audioCtx.createBufferSource(); noise.buffer = noiseBuf;
-      const hp = audioCtx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=freq*2;
-      noise.connect(hp); hp.connect(gain);
-      osc.connect(gain);
+      const hp = audioCtx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=frequency*2;
+      noise.connect(hp); hp.connect(gain); osc.connect(gain);
       gain.gain.setValueAtTime(0, now);
       gain.gain.linearRampToValueAtTime(volume, now + 0.06);
       gain.gain.setValueAtTime(volume, now + duration - 0.1);
@@ -427,13 +518,11 @@ function playNote(freq, duration, volume) {
     }
 
     case 'organ': {
-      // Hammond-ish: multiple sine harmonics sustained
-      const gain = audioCtx.createGain();
-      gain.connect(out);
+      const gain = audioCtx.createGain(); gain.connect(out);
       const harmonics = [1, 2, 3, 4, 6];
-      const vols      = [0.4, 0.3, 0.15, 0.1, 0.05];
+      const vols = [0.4, 0.3, 0.15, 0.1, 0.05];
       harmonics.forEach((h, idx) => {
-        const o = createOscWithType(freq * h, 'sine');
+        const o = createOscWithType(frequency * h, 'sine');
         const g = audioCtx.createGain(); g.gain.value = vols[idx];
         o.connect(g); g.connect(gain);
         o.start(now); o.stop(now + duration);
@@ -446,11 +535,9 @@ function playNote(freq, duration, volume) {
     }
 
     case 'marimba': {
-      // Marimba: sine + quick attack, fast decay, slight reverb tail
-      const gain = audioCtx.createGain();
-      gain.connect(out);
-      const osc = createOscWithType(freq, 'sine');
-      const osc2 = createOscWithType(freq * 4, 'sine');
+      const gain = audioCtx.createGain(); gain.connect(out);
+      const osc = createOscWithType(frequency, 'sine');
+      const osc2 = createOscWithType(frequency * 4, 'sine');
       const g2 = audioCtx.createGain(); g2.gain.value = 0.1;
       osc.connect(gain); osc2.connect(g2); g2.connect(gain);
       gain.gain.setValueAtTime(volume, now);
@@ -461,13 +548,11 @@ function playNote(freq, duration, volume) {
     }
 
     case 'strings': {
-      // Strings: slow attack, sawtooth + lowpass, chorus-like detune
       const gain = audioCtx.createGain();
-      const lp = audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=freq*3; lp.Q.value=0.5;
+      const lp = audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=frequency*3; lp.Q.value=0.5;
       lp.connect(out); gain.connect(lp);
-      const voices = [-8, 0, 8];
-      voices.forEach(det => {
-        const o = createOscWithType(freq, 'sawtooth', det);
+      [-8, 0, 8].forEach(det => {
+        const o = createOscWithType(frequency, 'sawtooth', det);
         const g = audioCtx.createGain(); g.gain.value = 0.3;
         o.connect(g); g.connect(gain);
         o.start(now); o.stop(now + duration);
@@ -480,15 +565,14 @@ function playNote(freq, duration, volume) {
     }
 
     case 'synth': {
-      // Synth: square + sub + envelope + filter sweep
       const gain = audioCtx.createGain();
       const filter = audioCtx.createBiquadFilter(); filter.type='lowpass'; filter.Q.value=8;
-      filter.frequency.setValueAtTime(freq * 1.5, now);
-      filter.frequency.exponentialRampToValueAtTime(freq * 8, now + 0.05);
-      filter.frequency.exponentialRampToValueAtTime(freq * 1.2, now + duration);
+      filter.frequency.setValueAtTime(frequency * 1.5, now);
+      filter.frequency.exponentialRampToValueAtTime(frequency * 8, now + 0.05);
+      filter.frequency.exponentialRampToValueAtTime(frequency * 1.2, now + duration);
       filter.connect(out); gain.connect(filter);
-      const osc = createOscWithType(freq, 'square');
-      const sub = createOscWithType(freq * 0.5, 'sine');
+      const osc = createOscWithType(frequency, 'square');
+      const sub = createOscWithType(frequency * 0.5, 'sine');
       const sg = audioCtx.createGain(); sg.gain.value = 0.35;
       osc.connect(gain); sub.connect(sg); sg.connect(gain);
       gain.gain.setValueAtTime(volume * 0.8, now);
@@ -506,6 +590,7 @@ const pressedKeys = new Set();
 let sustain = false;
 
 document.addEventListener('keydown', e => {
+  // Sustain
   if (e.code === 'Space') {
     e.preventDefault();
     if (!sustain) {
@@ -515,24 +600,98 @@ document.addEventListener('keydown', e => {
     }
     return;
   }
-  if (!audioCtx || pressedKeys.has(e.key)) return;
-  pressedKeys.add(e.key);
 
-  const dur = sustain ? 4.0 : 1.0;
-  const melDur = sustain ? 3.5 : 0.8;
+  // Octave shift via . and ,
+  if (e.key === '.') { if (octaveShift < 2) { octaveShift++; updateOctaveDisplay(); } return; }
+  if (e.key === ',') { if (octaveShift > -2) { octaveShift--; updateOctaveDisplay(); } return; }
 
-  if (chords[e.key]) {
-    currentChord = chords[e.key];
-    document.getElementById('chordDisplay').textContent = currentChord.name;
-    document.getElementById('chord-'+e.key).classList.add('pressed');
-    playNote(currentChord.bass, dur, 0.35);
+  // S modifier → minor
+  if (e.key === 's') {
+    if (!sHeld) {
+      sHeld = true;
+      if (currentChord) {
+        const root = currentChord.bassNote;
+        currentChord = makeChord(root, 'minor');
+        document.getElementById('chordDisplay').textContent = currentChord.name;
+      }
+      chordKeys.forEach(k => {
+        document.getElementById('chord-name-'+k).textContent = makeChord(chordRoots[k], 'minor').name;
+      });
+    }
+    return;
   }
+
+  // Q modifier → dom7
+  if (e.key === 'q') {
+    e.preventDefault();
+    if (!altHeld) {
+      altHeld = true;
+      if (currentChord) {
+        const root = currentChord.bassNote;
+        currentChord = makeChord(root, 'dom7');
+        document.getElementById('chordDisplay').textContent = currentChord.name;
+      }
+      chordKeys.forEach(k => {
+        document.getElementById('chord-name-'+k).textContent = makeChord(chordRoots[k], 'dom7').name;
+      });
+    }
+    return;
+  }
+
+  heldKeys.add(e.key);
+
+  // Left hand chord keys
+  if (chordRoots[e.key] && e.key !== 's') {
+    if (pressedKeys.has(e.key)) return;
+    pressedKeys.add(e.key);
+    const quality = altHeld ? 'dom7' : sHeld ? 'minor' : 'major';
+    const root = chordRoots[e.key];
+    currentChord = makeChord(root, quality);
+    document.getElementById('chordDisplay').textContent = currentChord.name;
+    // update UI label
+    chordKeys.forEach(k => {
+      const q = altHeld ? 'dom7' : sHeld ? 'minor' : 'major';
+      document.getElementById('chord-name-'+k).textContent = makeChord(chordRoots[k], q).name;
+    });
+    document.querySelectorAll('.chord-key').forEach(el => el.classList.remove('pressed'));
+    document.getElementById('chord-'+e.key).classList.add('pressed');
+    const bFreq = bassFreq(baseFreqs[root]);
+    const dur = sustain ? 4.0 : 1.2;
+    playNote(bFreq, dur, 0.35);
+    return;
+  }
+
+  // M = 扫弦：当前和弦所有音同时发声
+  if (e.key === 'm') {
+    if (!currentChord || pressedKeys.has('m')) return;
+    pressedKeys.add('m');
+    const melDur = sustain ? 3.5 : 0.8;
+    currentChord.tones.forEach((n, idx) => {
+      const f = baseFreqs[n] * Math.pow(2, octaveShift);
+      // 略微错开时间模拟扫弦感
+      setTimeout(() => playNote(f, melDur, 0.25), idx * 30);
+    });
+    return;
+  }
+
+  // Right hand melody
   if (rightKeys[e.key] && currentChord) {
-    const inputNote = rightKeys[e.key];
-    const targets = currentChord.snap[inputNote];
-    const el = document.getElementById('melody-'+e.key);
+    if (pressedKeys.has(e.key)) return;
+    pressedKeys.add(e.key);
+    const noteName = rightKeys[e.key];
+    const snapped = currentChord.snap[noteName];
+    const el = getMelodyEl(e.key);
     if (el) el.classList.add('pressed');
-    targets.forEach(n => playNote(noteTableExt[n], melDur, 0.28));
+    const melDur = sustain ? 3.5 : 0.8;
+    snapped.forEach(n => {
+      let f;
+      if (n.endsWith('_hi')) {
+        f = baseFreqs[n.replace('_hi','')] * Math.pow(2, octaveShift + 1);
+      } else {
+        f = baseFreqs[n] * Math.pow(2, octaveShift);
+      }
+      playNote(f, melDur, 0.28);
+    });
   }
 });
 
@@ -543,12 +702,35 @@ document.addEventListener('keyup', e => {
     si.textContent = 'OFF'; si.classList.remove('on');
     return;
   }
-  pressedKeys.delete(e.key);
-  if (chords[e.key]) document.getElementById('chord-'+e.key).classList.remove('pressed');
-  if (rightKeys[e.key]) {
-    const el = document.getElementById('melody-'+e.key);
-    if (el) el.classList.remove('pressed');
+  if (e.key === 's') {
+    sHeld = false;
+    if (currentChord) {
+      const root = currentChord.bassNote;
+      currentChord = makeChord(root, altHeld ? 'dom7' : 'major');
+      document.getElementById('chordDisplay').textContent = currentChord.name;
+    }
+    chordKeys.forEach(k => {
+      document.getElementById('chord-name-'+k).textContent = makeChord(chordRoots[k], altHeld ? 'dom7' : 'major').name;
+    });
+    return;
   }
+  if (e.key === 'q') {
+    altHeld = false;
+    if (currentChord) {
+      const root = currentChord.bassNote;
+      currentChord = makeChord(root, sHeld ? 'minor' : 'major');
+      document.getElementById('chordDisplay').textContent = currentChord.name;
+    }
+    chordKeys.forEach(k => {
+      document.getElementById('chord-name-'+k).textContent = makeChord(chordRoots[k], sHeld ? 'minor' : 'major').name;
+    });
+    return;
+  }
+  heldKeys.delete(e.key);
+  pressedKeys.delete(e.key);
+  if (e.key === 'm') return;
+  if (chordRoots[e.key]) document.getElementById('chord-'+e.key)?.classList.remove('pressed');
+  if (rightKeys[e.key]) getMelodyEl(e.key)?.classList.remove('pressed');
 });
 
 // Visualizer
