@@ -198,6 +198,19 @@
     }
     #startBtn:hover { opacity: 0.85; }
     #startBtn:disabled { opacity: 0.3; cursor: default; }
+    #langBtn {
+      background: var(--panel);
+      border: 1.5px solid var(--border);
+      color: var(--muted);
+      padding: 10px 18px;
+      border-radius: 99px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      transition: all 0.15s;
+    }
+    #langBtn:hover { border-color: var(--accent2); color: var(--accent2); }
 
     .octave-bar {
       display: flex;
@@ -369,6 +382,7 @@
 
 <button id="startBtn">▶ 启动声音</button>
 <button id="settingsBtn">⚙ 键位设置</button>
+<button id="langBtn">EN</button>
 
 <!-- Settings Modal -->
 <div id="settingsOverlay">
@@ -437,12 +451,12 @@
   </div>
 </div>
 
-<div class="status-bar" id="statusBar">和弦: <span id="chordDisplay">—</span> &nbsp;|&nbsp; 音色: <span id="timbreDisplay">钢琴</span> &nbsp;|&nbsp; 延音: <span id="sustainIndicator">OFF</span> &nbsp;|&nbsp; 鼓: <span id="drumDisplay">OFF</span></div>
+<div class="status-bar" id="statusBar">和弦: <span id="chordDisplay">—</span> &nbsp;|&nbsp; 音色: <span id="timbreDisplay">钢琴</span> &nbsp;|&nbsp; 延音: <span id="sustainIndicator">OFF</span> &nbsp;|&nbsp; 鼓: <span id="drumDisplay">OFF</span> &nbsp;|&nbsp; 移调: <span id="transposeDisplay">0</span> &nbsp;|&nbsp; N模式: <span id="arpeggioDisplay">上行</span></div>
 
 <div class="hint">
-  左手 C D E F G A B = 大和弦 &nbsp;·&nbsp; S = 小和弦 &nbsp;·&nbsp; Q = 属七 &nbsp;·&nbsp; M = 扫弦<br>
+  左手 C D E F G A B = 大和弦 &nbsp;·&nbsp; S = 小和弦 &nbsp;·&nbsp; Q = 属七 &nbsp;·&nbsp; W = 降半音(Bb) &nbsp;·&nbsp; M = 扫弦 &nbsp;·&nbsp; N = 琶音<br>
   右手白键 H J K L ; ' ↵ = Do Re Mi Fa So La Xi &nbsp;·&nbsp; 黑键 U I P [ ] = #Do #Re #Fa #So #La &nbsp;·&nbsp; O = 高音Do<br>
-  空格 = 延音 &nbsp;·&nbsp; . / , = 升/降八度 &nbsp;·&nbsp; T = 鼓点速度切换(off→80→100→120) &nbsp;·&nbsp; R = 切换节奏型
+  空格 = 延音 &nbsp;·&nbsp; . / , = 升/降八度 &nbsp;·&nbsp; V/X = 移调 &nbsp;·&nbsp; T = 鼓点速度 &nbsp;·&nbsp; R = 鼓型 &nbsp;·&nbsp; 1=上行 2=下行 3=来回 4=跳音
 </div>
 
 <script>
@@ -461,11 +475,10 @@ const baseFreqs = {
 };
 
 function freq(note) {
-  return baseFreqs[note] * Math.pow(2, octaveShift);
+  return baseFreqs[note] * Math.pow(2, octaveShift + transposeShift/12);
 }
 function bassFreq(f) {
-  // bass always one octave below current octave
-  return f * Math.pow(2, octaveShift - 1);
+  return f * Math.pow(2, octaveShift - 1 + transposeShift/12);
 }
 
 // Right hand key → note name
@@ -482,34 +495,47 @@ const rightKeys = {
 // snap: for each white+black note, which chord tones to snap to
 // We define snap in terms of scale-degree names, resolve at play time
 function makeChord(root, quality) {
-  // intervals in semitones
   const intervals = quality === 'major' ? [0,4,7] : quality === 'minor' ? [0,3,7] : quality === 'dom7' ? [0,4,7,10] : [0,3,6];
   const noteNames = Object.keys(baseFreqs);
   const rootIdx = noteNames.indexOf(root);
   const tones = intervals.map(i => noteNames[(rootIdx + i) % 12]);
-  // snap: for every playable note, find closest chord tone
   const allPlayable = ["C","Cs","D","Ds","E","F","Fs","G","Gs","A","As","B","C_hi"];
+
+  // 扩展音符列表：把 C_hi 视为 index=12，这样 B(11) 离 C_hi(12) 距离=1，比离 C(0) 的循环距离(1)相同
+  // 但线性更近，所以 B snap 到 C_hi 更自然
+  // 方案：对每个音用线性距离（在0..12范围内）计算，C_hi=12
+  const linearIndex = { C:0, Cs:1, D:2, Ds:3, E:4, F:5, Fs:6, G:7, Gs:8, A:9, As:10, B:11, C_hi:12 };
+  // tones 扩展：包含原始音和高八度根音（C_hi）
+  const tonesExtended = [...tones];
+  if (tones.includes('C')) tonesExtended.push('C_hi'); // C 也出现在高八度
+
   const snap = {};
   allPlayable.forEach(note => {
-    const n = note === "C_hi" ? "C" : note;
-    const nIdx = noteNames.indexOf(n);
+    const nIdx = linearIndex[note];
     let bestDist = 99;
-    tones.forEach(t => {
-      const tIdx = noteNames.indexOf(t);
-      const dist = Math.min(Math.abs(tIdx - nIdx), 12 - Math.abs(tIdx - nIdx));
+    tonesExtended.forEach(t => {
+      const tIdx = linearIndex[t] !== undefined ? linearIndex[t] : noteNames.indexOf(t);
+      const dist = Math.abs(tIdx - nIdx);
       if (dist < bestDist) bestDist = dist;
     });
-    const best = tones.filter(t => {
-      const tIdx = noteNames.indexOf(t);
-      const dist = Math.min(Math.abs(tIdx - nIdx), 12 - Math.abs(tIdx - nIdx));
-      return dist === bestDist;
+    const best = tonesExtended.filter(t => {
+      const tIdx = linearIndex[t] !== undefined ? linearIndex[t] : noteNames.indexOf(t);
+      return Math.abs(tIdx - nIdx) === bestDist;
     });
-    if (note === "C_hi") {
-      snap[note] = best.map(t => t + "_hi");
-    } else {
-      snap[note] = best;
+    // 去重（防止 C 和 C_hi 都在同距离时重复发两次普通C）
+    // 如果 best 里同时有 C 和 C_hi，根据 note 的位置决定：上半段(>=7)用 C_hi
+    let finalBest = best;
+    if (best.includes('C') && best.includes('C_hi')) {
+      finalBest = nIdx >= 6 ? ['C_hi'] : ['C'];
     }
+    // 输出：C_hi 保持 _hi 后缀，普通音正常
+    snap[note] = finalBest.map(t => {
+      if (t === 'C_hi') return 'C_hi';
+      if (note === 'C_hi' && t === 'C') return 'C_hi'; // C_hi 自己 snap 到 C → 应该输出 C_hi
+      return t;
+    });
   });
+
   const bassNote = root;
   const name = root + (quality === 'major' ? '' : quality === 'minor' ? 'm' : quality === 'dom7' ? '7' : 'dim');
   return { name, tones, snap, bassNote };
@@ -529,6 +555,10 @@ const timbreNames = {piano_sampled:"钢琴", guitar_sampled:"吉他", electric_s
 const heldKeys = new Set();
 let sHeld = false;
 let altHeld = false;
+let wHeld = false;       // W = 降半音修饰（Bb类和弦）
+let transposeShift = 0;  // 移调：半音数，-12~+12
+let arpeggioStep = 0;    // N键循环步数
+let arpeggioMode = 1;    // 1=上行 2=下行 3=来回 4=跳音
 
 // Build chord UI
 const chordKeys = ['c','d','e','f','g','a','b'];
@@ -570,7 +600,7 @@ document.getElementById('startBtn').addEventListener('click', function() {
   analyserData = new Uint8Array(analyser.frequencyBinCount);
   analyser.connect(audioCtx.destination);
   this.disabled = true;
-  this.textContent = '✓ 已启动';
+  this.textContent = i18n[lang].startedBtn;
   drawVisualizer();
 
   // 后台加载采样乐器
@@ -583,8 +613,9 @@ document.getElementById('startBtn').addEventListener('click', function() {
     { key: '_sfMarimba', inst: 'marimba',                timbre: 'marimba_sampled', label: '🪘 木琴' },
     { key: '_sfStrings', inst: 'string_ensemble_1',      timbre: 'strings_sampled', label: '🎻 弦乐' },
   ];
-  sfInstruments.forEach(({ key, inst, timbre, label }) => {
+  sfInstruments.forEach(({ key, inst, timbre }) => {
     const btn = document.querySelector(`[data-timbre="${timbre}"]`);
+    const label = i18n[lang].sfLabels[timbre] || timbre;
     if (btn) btn.textContent = label + ' …';
     Soundfont.instrument(audioCtx, inst, {
       soundfont: 'MusyngKite',
@@ -592,9 +623,9 @@ document.getElementById('startBtn').addEventListener('click', function() {
         `https://gleitz.github.io/midi-js-soundfonts/${sf}/${name}-mp3.js`,
     }).then(sf => {
       window[key] = sf;
-      if (btn) btn.textContent = label + ' ✓';
+      if (btn) btn.textContent = (i18n[lang].sfLabels[timbre] || timbre) + ' ✓';
     }).catch(() => {
-      if (btn) btn.textContent = label + ' ✗';
+      if (btn) btn.textContent = (i18n[lang].sfLabels[timbre] || timbre) + ' ✗';
     });
   });
 });
@@ -609,6 +640,26 @@ document.getElementById('octaveDown').addEventListener('click', () => {
 function updateOctaveDisplay() {
   const s = octaveShift > 0 ? '+'+octaveShift : octaveShift === 0 ? '0' : String(octaveShift);
   document.getElementById('octaveDisplay').textContent = s;
+}
+function updateTransposeDisplay() {
+  const s = transposeShift > 0 ? '+'+transposeShift : String(transposeShift);
+  document.getElementById('transposeDisplay').textContent = s;
+}
+const arpeggioModeNames = { 1:'上行', 2:'根音跳高', 3:'来回', 4:'跳音' };
+function updateArpeggioDisplay() {
+  const el = document.getElementById('arpeggioDisplay');
+  if (el) el.textContent = arpeggioModeNames[arpeggioMode];
+}
+
+// 降半音：C→B, D→Db(Cs), E→Eb(Ds), etc.
+const noteNames12 = ['C','Cs','D','Ds','E','F','Fs','G','Gs','A','As','B'];
+function flatNote(note) {
+  const idx = noteNames12.indexOf(note);
+  return noteNames12[(idx - 1 + 12) % 12];
+}
+function sharpNote(note) {
+  const idx = noteNames12.indexOf(note);
+  return noteNames12[(idx + 1) % 12];
 }
 
 // Timbre buttons
@@ -683,7 +734,7 @@ function playNote(frequency, duration, volume) {
       const noteNames3 = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
       const oct3 = Math.floor(midiNum / 12) - 1;
       const noteName3 = noteNames3[midiNum % 12] + oct3;
-      window[key].play(noteName3, audioCtx.currentTime, { gain: volume * 2.5, duration });
+      window[key].play(noteName3, audioCtx.currentTime, { gain: volume * 5, duration });
       break;
     }
 
@@ -851,6 +902,31 @@ document.addEventListener('keydown', e => {
   if (e.key === keyMap.fn_octup) { if (octaveShift < 2) { octaveShift++; updateOctaveDisplay(); } return; }
   if (e.key === keyMap.fn_octdn) { if (octaveShift > -2) { octaveShift--; updateOctaveDisplay(); } return; }
 
+  // X/V = 移调（半音）
+  if (e.key === 'x') { transposeShift--; updateTransposeDisplay(); return; }
+  if (e.key === 'v') { transposeShift++; updateTransposeDisplay(); return; }
+
+  // W = 降半音修饰（Bb类和弦）
+  if (e.key === 'w') {
+    e.preventDefault();
+    if (!wHeld) {
+      wHeld = true;
+      if (currentChord) {
+        const flatRoot = flatNote(currentChord.bassNote);
+        const quality = altHeld ? 'dom7' : sHeld ? 'minor' : 'major';
+        currentChord = makeChord(flatRoot, quality);
+        document.getElementById('chordDisplay').textContent = currentChord.name;
+      }
+      // 更新所有和弦按键标签为降半音版本
+      chordKeys.forEach(k => {
+        const quality = altHeld ? 'dom7' : sHeld ? 'minor' : 'major';
+        const root = chordRoots[keyMap['chord_'+k]] || chordRoots[k];
+        if (root) document.getElementById('chord-name-'+k).textContent = makeChord(flatNote(root), quality).name;
+      });
+    }
+    return;
+  }
+
   // minor modifier
   if (e.key === keyMap.mod_minor) {
     if (!sHeld) {
@@ -891,8 +967,10 @@ document.addEventListener('keydown', e => {
     if (pressedKeys.has(e.key)) return;
     pressedKeys.add(e.key);
     const quality = altHeld ? 'dom7' : sHeld ? 'minor' : 'major';
-    const root = chordRoots[e.key];
+    const rawRoot = chordRoots[e.key];
+    const root = wHeld ? flatNote(rawRoot) : rawRoot;
     currentChord = makeChord(root, quality);
+    arpeggioStep = 0;
     document.getElementById('chordDisplay').textContent = currentChord.name;
     chordKeys.forEach(k => {
       const q = altHeld ? 'dom7' : sHeld ? 'minor' : 'major';
@@ -908,13 +986,82 @@ document.addEventListener('keydown', e => {
     return;
   }
 
+  // 1234 切换 N 的琶音模式
+  if (['1','2','3','4'].includes(e.key)) {
+    arpeggioMode = parseInt(e.key);
+    arpeggioStep = 0;
+    updateArpeggioDisplay();
+    return;
+  }
+
+  // N = 循环弹和弦音（4种模式）
+  if (e.key === 'n') {
+    if (!currentChord || pressedKeys.has('n')) return;
+    pressedKeys.add('n');
+    const melDur = sustain ? 3.5 : 0.8;
+    const tones = currentChord.tones;
+    const highRoots = ['Fs','G','Gs','A','As','B'];
+    const rootIsHigh = highRoots.includes(currentChord.bassNote);
+    const isDom7 = tones.length === 4;
+    const noteNames = Object.keys(baseFreqs);
+    const rootIdx = noteNames.indexOf(tones[0]);
+
+    // 构建基础上行序列（各音的八度偏移）
+    let baseSeq;
+    if (rootIsHigh) {
+      baseSeq = [
+        { note: tones[0], oct: -1 },
+        ...tones.slice(1).map(t => ({
+          note: t,
+          oct: noteNames.indexOf(t) > rootIdx ? -1 : 0
+        })),
+        ...(isDom7 ? [] : [{ note: tones[0], oct: 0 }]),
+      ];
+    } else {
+      baseSeq = [
+        { note: tones[0], oct: 0 },
+        { note: tones[1], oct: 0 },
+        { note: tones[2], oct: 0 },
+        ...(tones[3] ? [{ note: tones[3], oct: 0 }] : []),
+        ...(isDom7 ? [] : [{ note: tones[0], oct: 1 }]),
+      ];
+    }
+
+    // 按模式生成完整序列
+    let modeSeq;
+    if (arpeggioMode === 1) {
+      // 上行
+      modeSeq = baseSeq;
+    } else if (arpeggioMode === 2) {
+      // 模式2：根音 → 高八度根音 → 三度 → 五度 → [七度]
+      const top = rootIsHigh
+        ? { note: tones[0], oct: 0 }
+        : { note: tones[0], oct: 1 };
+      modeSeq = [baseSeq[0], top, ...baseSeq.slice(1, isDom7 ? undefined : -1)];
+    } else if (arpeggioMode === 3) {
+      // 来回：上行 + 下行去掉首尾重复
+      modeSeq = [...baseSeq, ...[...baseSeq].reverse().slice(1, -1)];
+    } else {
+      // 跳音：根音穿插（根音 → 三度 → 根音 → 五度 → 根音 → ...）
+      const root = baseSeq[0];
+      modeSeq = baseSeq.slice(1).flatMap(item => [root, item]);
+    }
+
+    const step = arpeggioStep % modeSeq.length;
+    const { note, oct } = modeSeq[step];
+    const f = baseFreqs[note] * Math.pow(2, octaveShift + oct + transposeShift/12);
+    playNote(f, melDur, 0.45);
+    arpeggioStep++;
+    return;
+  }
+
   // 扫弦
   if (e.key === keyMap.mod_strum) {
     if (!currentChord || pressedKeys.has(keyMap.mod_strum)) return;
     pressedKeys.add(keyMap.mod_strum);
     const melDur = sustain ? 3.5 : 0.8;
     currentChord.tones.forEach((n, idx) => {
-      const f = baseFreqs[n] * Math.pow(2, octaveShift);
+      const f = baseFreqs[n] * Math.pow(2, octaveShift + transposeShift/12);
       setTimeout(() => playNote(f, melDur, 0.4), idx * 30);
     });
     return;
@@ -934,15 +1081,14 @@ document.addEventListener('keydown', e => {
       const snapped = currentChord.snap[noteName];
       snapped.forEach(n => {
         const f = n.endsWith('_hi')
-          ? baseFreqs[n.replace('_hi','')] * Math.pow(2, octaveShift + 1)
-          : baseFreqs[n] * Math.pow(2, octaveShift);
+          ? baseFreqs[n.replace('_hi','')] * Math.pow(2, octaveShift + 1 + transposeShift/12)
+          : baseFreqs[n] * Math.pow(2, octaveShift + transposeShift/12);
         playNote(f, melDur, 0.45);
       });
     } else {
-      // 无和弦，直接发原音
       const f = noteName === 'C_hi'
-        ? baseFreqs['C'] * Math.pow(2, octaveShift + 1)
-        : baseFreqs[noteName] * Math.pow(2, octaveShift);
+        ? baseFreqs['C'] * Math.pow(2, octaveShift + 1 + transposeShift/12)
+        : baseFreqs[noteName] * Math.pow(2, octaveShift + transposeShift/12);
       playNote(f, melDur, 0.45);
     }
   }
@@ -953,6 +1099,20 @@ document.addEventListener('keyup', e => {
     sustain = false;
     const si = document.getElementById('sustainIndicator');
     si.textContent = 'OFF'; si.classList.remove('on');
+    return;
+  }
+  if (e.key === 'w') {
+    wHeld = false;
+    if (currentChord) {
+      const naturalRoot = sharpNote(currentChord.bassNote);
+      const quality = altHeld ? 'dom7' : sHeld ? 'minor' : 'major';
+      currentChord = makeChord(naturalRoot, quality);
+      document.getElementById('chordDisplay').textContent = currentChord.name;
+    }
+    chordKeys.forEach(k => {
+      const quality = altHeld ? 'dom7' : sHeld ? 'minor' : 'major';
+      document.getElementById('chord-name-'+k).textContent = makeChord(chordRoots[k], quality).name;
+    });
     return;
   }
   if (e.key === keyMap.mod_minor) {
@@ -982,6 +1142,7 @@ document.addEventListener('keyup', e => {
   heldKeys.delete(e.key);
   pressedKeys.delete(e.key);
   if (e.key === keyMap.mod_strum) return;
+  if (e.key === 'n') return;
   if (chordRoots[e.key]) {
     const noteForKey = ['c','d','e','f','g','a','b'].find(n => keyMap['chord_'+n] === e.key);
     if (noteForKey) document.getElementById('chord-'+noteForKey)?.classList.remove('pressed');
@@ -1106,7 +1267,7 @@ document.addEventListener('keydown', e => {
   const el = document.querySelector(`.km-key[data-id="${listeningId}"]`);
 
   if (conflict) {
-    el.textContent = '冲突!';
+    el.textContent = i18n[lang].conflict;
     el.style.color = '#e87e7e';
     setTimeout(() => {
       el.textContent = displayKey(keyMap[listeningId]);
@@ -1194,7 +1355,7 @@ let drumBeat = 0;
 
 function drumBpm() { return drumBpmOptions[drumBpmIdx]; }
 
-const drumVol = 0.55; // 主音量控制
+const drumVol = 0.4; // 主音量控制
 
 // --- Rich drum synthesis ---
 function playKick() {
@@ -1418,6 +1579,198 @@ function drawVisualizer() {
     ctx2.fillRect(i * bw, H - h, bw - 1, h);
   }
 }
+
+// ---- i18n ----
+let lang = localStorage.getItem('pianoLang') || 'zh';
+
+const i18n = {
+  zh: {
+    startBtn: '▶ 启动声音',
+    startedBtn: '✓ 已启动',
+    settingsBtn: '⚙ 键位设置',
+    langBtn: 'EN',
+    settingsTitle: '⚙ 键位设置',
+    secChordRoot: '左手 · 和弦根音',
+    secMod: '左手 · 功能修饰键',
+    secWhite: '右手 · 白键旋律',
+    secBlack: '右手 · 黑键 & 高音',
+    secFunc: '功能键',
+    resetBtn: '恢复默认',
+    saveBtn: '保存',
+    octaveLabel: '八度',
+    leftHandTitle: '左手 · 和弦',
+    rightHandTitle: '右手 · 旋律',
+    statusChord: '和弦',
+    statusTimbre: '音色',
+    statusSustain: '延音',
+    statusDrum: '鼓',
+    statusTranspose: '移调',
+    statusArpMode: 'N模式',
+    hint1: '左手 C D E F G A B = 大和弦 &nbsp;·&nbsp; S = 小和弦 &nbsp;·&nbsp; Q = 属七 &nbsp;·&nbsp; W = 降半音(Bb) &nbsp;·&nbsp; M = 扫弦 &nbsp;·&nbsp; N = 琶音',
+    hint2: '右手白键 H J K L ; \' ↵ = Do Re Mi Fa So La Xi &nbsp;·&nbsp; 黑键 U I P [ ] = #Do #Re #Fa #So #La &nbsp;·&nbsp; O = 高音Do',
+    hint3: '空格 = 延音 &nbsp;·&nbsp; . / , = 升/降八度 &nbsp;·&nbsp; V/X = 移调 &nbsp;·&nbsp; T = 鼓点速度 &nbsp;·&nbsp; R = 鼓型 &nbsp;·&nbsp; 1=上行 2=根音跳高 3=来回 4=跳音',
+    conflict: '冲突!',
+    arpModes: { 1:'上行', 2:'根音跳高', 3:'来回', 4:'跳音' },
+    timbreNames: { piano_sampled:'钢琴', guitar_sampled:'吉他', electric_sampled:'电吉他', flute_sampled:'长笛', organ_sampled:'风琴', marimba_sampled:'木琴', strings_sampled:'弦乐', synth:'合成器' },
+    sfLabels: {
+      piano_sampled:'🎹 钢琴', guitar_sampled:'🎸 吉他', electric_sampled:'⚡ 电吉他',
+      flute_sampled:'🎵 长笛', organ_sampled:'🎺 风琴', marimba_sampled:'🪘 木琴', strings_sampled:'🎻 弦乐',
+    },
+    keyLabels: {
+      chord_c:'和弦 C', chord_d:'和弦 D', chord_e:'和弦 E', chord_f:'和弦 F',
+      chord_g:'和弦 G', chord_a:'和弦 A', chord_b:'和弦 B',
+      mod_minor:'小和弦', mod_dom7:'属七', mod_strum:'扫弦',
+      rh_C:'Do', rh_D:'Re', rh_E:'Mi', rh_F:'Fa',
+      rh_G:'So', rh_A:'La', rh_B:'Xi',
+      rh_Cs:'#Do', rh_Ds:'#Re', rh_Fs:'#Fa', rh_Gs:'#So', rh_As:'#La',
+      rh_C_hi:'高音Do',
+      fn_sustain:'延音', fn_octup:'升八度', fn_octdn:'降八度',
+      fn_drum:'鼓点速度', fn_drumPat:'鼓型切换',
+    },
+  },
+  en: {
+    startBtn: '▶ Start Audio',
+    startedBtn: '✓ Ready',
+    settingsBtn: '⚙ Key Map',
+    langBtn: '中文',
+    settingsTitle: '⚙ Key Mapping',
+    secChordRoot: 'Left Hand · Chord Roots',
+    secMod: 'Left Hand · Modifiers',
+    secWhite: 'Right Hand · White Keys',
+    secBlack: 'Right Hand · Black Keys & High',
+    secFunc: 'Function Keys',
+    resetBtn: 'Reset Defaults',
+    saveBtn: 'Save',
+    octaveLabel: 'Octave',
+    leftHandTitle: 'Left · Chords',
+    rightHandTitle: 'Right · Melody',
+    statusChord: 'Chord',
+    statusTimbre: 'Timbre',
+    statusSustain: 'Sustain',
+    statusDrum: 'Drum',
+    statusTranspose: 'Transpose',
+    statusArpMode: 'Arp',
+    hint1: 'Left C D E F G A B = Major &nbsp;·&nbsp; S = Minor &nbsp;·&nbsp; Q = Dom7 &nbsp;·&nbsp; W = Flat (Bb) &nbsp;·&nbsp; M = Strum &nbsp;·&nbsp; N = Arpeggio',
+    hint2: 'Right white H J K L ; \' ↵ = Do Re Mi Fa So La Ti &nbsp;·&nbsp; Black U I P [ ] = #Do #Re #Fa #So #La &nbsp;·&nbsp; O = High Do',
+    hint3: 'Space = Sustain &nbsp;·&nbsp; . / , = Octave ↑↓ &nbsp;·&nbsp; V/X = Transpose &nbsp;·&nbsp; T = Drum BPM &nbsp;·&nbsp; R = Pattern &nbsp;·&nbsp; 1=Up 2=RootHi 3=UpDown 4=Skip',
+    conflict: 'Conflict!',
+    arpModes: { 1:'Up', 2:'RootHi', 3:'Up-Down', 4:'Skip' },
+    timbreNames: { piano_sampled:'Piano', guitar_sampled:'Guitar', electric_sampled:'E.Guitar', flute_sampled:'Flute', organ_sampled:'Organ', marimba_sampled:'Marimba', strings_sampled:'Strings', synth:'Synth' },
+    sfLabels: {
+      piano_sampled:'🎹 Piano', guitar_sampled:'🎸 Guitar', electric_sampled:'⚡ E.Guitar',
+      flute_sampled:'🎵 Flute', organ_sampled:'🎺 Organ', marimba_sampled:'🪘 Marimba', strings_sampled:'🎻 Strings',
+    },
+    keyLabels: {
+      chord_c:'Chord C', chord_d:'Chord D', chord_e:'Chord E', chord_f:'Chord F',
+      chord_g:'Chord G', chord_a:'Chord A', chord_b:'Chord B',
+      mod_minor:'Minor', mod_dom7:'Dom7', mod_strum:'Strum',
+      rh_C:'Do', rh_D:'Re', rh_E:'Mi', rh_F:'Fa',
+      rh_G:'So', rh_A:'La', rh_B:'Ti',
+      rh_Cs:'#Do', rh_Ds:'#Re', rh_Fs:'#Fa', rh_Gs:'#So', rh_As:'#La',
+      rh_C_hi:'Hi Do',
+      fn_sustain:'Sustain', fn_octup:'Oct Up', fn_octdn:'Oct Down',
+      fn_drum:'Drum BPM', fn_drumPat:'Pattern',
+    },
+  },
+};
+
+function t(key) { return i18n[lang][key]; }
+
+function applyLang() {
+  const L = i18n[lang];
+
+  // buttons
+  document.getElementById('langBtn').textContent = L.langBtn;
+  document.getElementById('settingsBtn').textContent = L.settingsBtn;
+  const sb = document.getElementById('startBtn');
+  if (sb.disabled) sb.textContent = L.startedBtn;
+  else sb.textContent = L.startBtn;
+
+  // settings modal
+  document.querySelector('#settingsModal .settings-header h2').textContent = L.settingsTitle;
+  const secHeadings = document.querySelectorAll('.settings-section h4');
+  const secKeys = ['secChordRoot','secMod','secWhite','secBlack','secFunc'];
+  secHeadings.forEach((el, i) => { if (secKeys[i]) el.textContent = L[secKeys[i]]; });
+  document.getElementById('settingsReset').textContent = L.resetBtn;
+  document.getElementById('settingsSave').textContent = L.saveBtn;
+
+  // octave label
+  const octBar = document.querySelector('.octave-bar span');
+  if (octBar) octBar.firstChild.textContent = L.octaveLabel + ' ';
+
+  // panel headings
+  const panelH3s = document.querySelectorAll('.panel h3');
+  if (panelH3s[0]) panelH3s[0].textContent = L.leftHandTitle;
+  if (panelH3s[1]) panelH3s[1].textContent = L.rightHandTitle;
+
+  // status bar
+  document.getElementById('statusBar').innerHTML =
+    `${L.statusChord}: <span id="chordDisplay">${document.getElementById('chordDisplay')?.textContent||'—'}</span> &nbsp;|&nbsp; ` +
+    `${L.statusTimbre}: <span id="timbreDisplay">${document.getElementById('timbreDisplay')?.textContent||''}</span> &nbsp;|&nbsp; ` +
+    `${L.statusSustain}: <span id="sustainIndicator" class="${document.getElementById('sustainIndicator')?.className||''}">${document.getElementById('sustainIndicator')?.textContent||'OFF'}</span> &nbsp;|&nbsp; ` +
+    `${L.statusDrum}: <span id="drumDisplay">${document.getElementById('drumDisplay')?.textContent||'OFF'}</span> &nbsp;|&nbsp; ` +
+    `${L.statusTranspose}: <span id="transposeDisplay">${document.getElementById('transposeDisplay')?.textContent||'0'}</span> &nbsp;|&nbsp; ` +
+    `${L.statusArpMode}: <span id="arpeggioDisplay">${L.arpModes[arpeggioMode]}</span>`;
+
+  // hint lines
+  const hints = document.querySelectorAll('.hint');
+  if (hints[0]) hints[0].innerHTML = `${L.hint1}<br>${L.hint2}<br>${L.hint3}`;
+
+  // timbre names mapping & buttons
+  Object.assign(timbreNames, L.timbreNames);
+  document.querySelectorAll('.timbre-btn').forEach(btn => {
+    const timbre = btn.dataset.timbre;
+    const sfLabel = L.sfLabels[timbre];
+    if (sfLabel) {
+      // preserve loading state suffix if present
+      const suffix = btn.textContent.match(/ (…|✓|✗)$/) ? ' ' + btn.textContent.match(/ (…|✓|✗)$/)[1] : '';
+      btn.textContent = sfLabel + suffix;
+    } else if (timbre === 'synth') {
+      btn.textContent = '🌀 ' + L.timbreNames.synth;
+    }
+  });
+
+  // current timbre display
+  const td = document.getElementById('timbreDisplay');
+  if (td) td.textContent = L.timbreNames[currentTimbre] || td.textContent;
+
+  // arpeggio display
+  const ad = document.getElementById('arpeggioDisplay');
+  if (ad) ad.textContent = L.arpModes[arpeggioMode];
+
+  // rebuild settings UI labels if open
+  if (document.getElementById('settingsOverlay').classList.contains('open')) {
+    buildSettingsUI();
+  }
+
+  // html lang attr
+  document.documentElement.lang = lang === 'zh' ? 'zh' : 'en';
+}
+
+document.getElementById('langBtn').addEventListener('click', () => {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  localStorage.setItem('pianoLang', lang);
+  applyLang();
+});
+
+// Patch buildSettingsUI to use i18n keyLabels
+const _origBuildSettingsUI = buildSettingsUI;
+buildSettingsUI = function() {
+  // update keyLabels from current lang before rebuilding
+  Object.assign(keyLabels, i18n[lang].keyLabels);
+  _origBuildSettingsUI();
+};
+
+// Patch conflict text
+const _origKeydown = null; // handled inline via i18n.conflict lookup below
+
+// Patch startBtn to use i18n
+document.getElementById('startBtn').addEventListener('click', () => {
+  document.getElementById('startBtn').textContent = i18n[lang].startedBtn;
+}, { once: true });
+
+// Apply on load
+applyLang();
 </script>
 </body>
 </html>
