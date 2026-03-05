@@ -1,23 +1,22 @@
+[README.md](https://github.com/user-attachments/files/25776594/README.md)
 # ⬡ Smart Piano
 
-A browser-based intelligent piano that lets you play melodies and chords together using your keyboard — no music theory knowledge required. The right hand snaps to the nearest chord tone when the left hand is held, and plays free notes when released.
+A browser-based intelligent piano. Hold a chord with your left hand, play melody with your right — notes automatically snap to the nearest chord tone so you almost can't play a wrong note. No installation, no server, no music theory required.
 
 ---
 
-## Getting Started
+## Quick Start
 
-Open `smart-piano.html` in any modern browser (Chrome recommended). Click **▶ Start Audio** to initialize the sound engine. The sampled instruments will begin loading in the background — buttons show `…` while loading and `✓` when ready.
-
-No installation, no dependencies, no backend. Everything runs in the browser.
+Open `smart-piano.html` in any modern browser (Chrome recommended). Click **▶ Start Audio** to initialize the sound engine. Sampled instruments load in the background — buttons show `…` while loading, `✓` when ready. Switch the interface language with the **EN / 中文** button in the top bar.
 
 ---
 
-## Key Mapping
+## Key Map
 
 ### Left Hand — Chords
 
-| Key | Chord Root |
-|-----|-----------|
+| Key | Chord |
+|-----|-------|
 | C | C major |
 | D | D major |
 | E | E major |
@@ -26,9 +25,13 @@ No installation, no dependencies, no backend. Everything runs in the browser.
 | A | A major |
 | B | B major |
 
-Hold **S** while pressing a chord key → minor chord  
-Hold **Q** while pressing a chord key → dominant 7th chord  
-Press **M** → strum all notes of the current chord
+| Modifier | Effect |
+|----------|--------|
+| Hold **S** + chord key | Minor chord |
+| Hold **Q** + chord key | Dominant 7th |
+| Hold **W** + chord key | Flat root — e.g. B+W = B♭ |
+| **M** | Strum current chord |
+| **N** | Arpeggio (cycle through chord tones) |
 
 ### Right Hand — Melody
 
@@ -40,36 +43,53 @@ Press **M** → strum all notes of the current chord
 | L | Fa (F) |
 | ; | So (G) |
 | ' | La (A) |
-| Enter | Xi (B) |
+| Enter | Ti (B) |
 | O | High Do (C↑) |
 
-**Black keys:** U = #Do · I = #Re · P = #Fa · [ = #So · ] = #La
+**Black keys:** U = ♯Do · I = ♯Re · P = ♯Fa · [ = ♯So · ] = ♯La
 
 ### Smart Snapping
 
-When the left hand holds a chord, right-hand notes snap to the nearest chord tone — making it nearly impossible to play a wrong note. When no chord is held, the right hand plays freely at its natural pitch.
+When the left hand holds a chord, right-hand notes snap to the nearest chord tone — multiple equidistant tones all play at once. When no chord is held, the right hand plays freely at its natural pitch.
+
+### Arpeggio Modes (N key)
+
+Switch modes with **1 / 2 / 3 / 4**. Current mode shown in the status bar.
+
+| Key | Mode | Example (C major) |
+|-----|------|-------------------|
+| 1 | Up | C → E → G → C↑ |
+| 2 | Root Jump | C → C↑ → E → G |
+| 3 | Up-Down | C → E → G → C↑ → G → E |
+| 4 | Skip (root interleaved) | C → E → C → G → C → C↑ |
+
+For roots F♯ and above (G, A, B…), the sequence starts one octave lower so it always ascends naturally — e.g. G major: low G → low B → D → G.
+
+Dominant 7th chords use 4 tones with no added high root (C7: C → E → G → B♭).
 
 ### Function Keys
 
 | Key | Function |
 |-----|----------|
-| Space | Sustain on/off |
+| Space | Sustain on / off |
 | . | Octave up |
 | , | Octave down |
-| T | Drum tempo cycle: off → 80 → 100 → 120 BPM |
+| V | Transpose up 1 semitone |
+| X | Transpose down 1 semitone |
+| T | Drum tempo: off → 80 → 100 → 120 BPM |
 | R | Cycle drum pattern (3 patterns) |
 
 ---
 
 ## Instruments
 
-All instruments use real audio samples from the **MusyngKite** soundfont (loaded from CDN on first use). Falls back to a synthesizer if the network is unavailable.
+All instruments use real audio samples from the **MusyngKite** soundfont, loaded from CDN on first use. Falls back to the built-in synthesizer if the network is unavailable.
 
 | Button | Instrument |
 |--------|-----------|
 | 🎹 Piano | Acoustic grand piano |
 | 🎸 Guitar | Nylon string acoustic guitar |
-| ⚡ Electric Guitar | Clean electric guitar |
+| ⚡ E.Guitar | Clean electric guitar |
 | 🎵 Flute | Concert flute |
 | 🎺 Organ | Rock organ |
 | 🪘 Marimba | Marimba |
@@ -80,29 +100,35 @@ All instruments use real audio samples from the **MusyngKite** soundfont (loaded
 
 ## Drum Machine
 
-Press **T** to cycle through drum tempos (off / 80 / 100 / 120 BPM).  
-Press **R** to switch between 3 drum patterns:
-- Pattern 1 — Standard 4/4 with crash
-- Pattern 2 — Busy kick with dense hi-hat and rim shots
-- Pattern 3 — Clap + tom fills
+**T** cycles tempo: off / 80 / 100 / 120 BPM
+**R** cycles 3 patterns:
+- Pattern 1 — Standard 4/4 with crash on beat 1
+- Pattern 2 — Syncopated kick, dense hi-hat, rim shots
+- Pattern 3 — Clap layers + tom fills
 
-Drum sounds are synthesized entirely via Web Audio API (kick, snare, hi-hat, open hi-hat, rim, clap, crash, toms).
+All drum sounds are synthesized via Web Audio API (kick, snare, hi-hat open/closed, rim, clap, crash, toms).
 
 ---
 
 ## Key Remapping
 
-Click **⚙ Key Settings** to open the remapping panel. Click any key slot, then press a new key to reassign it. Conflicts are flagged immediately. Click **Save** to apply — settings are stored in `localStorage` and persist across sessions. Click **Reset to Default** to restore the original layout.
+Click **⚙ Key Map** to open the remapping panel. Click any slot, press a new key to assign it. Conflicts are flagged immediately. **Save** writes to `localStorage` and persists across sessions. **Reset Defaults** restores the original layout.
+
+---
+
+## Language
+
+Click **EN** to switch to English. Click **中文** to switch back. The preference is saved in `localStorage`.
 
 ---
 
 ## Technical Notes
 
-- Built with vanilla HTML/CSS/JavaScript, zero frameworks
+- Pure HTML / CSS / JavaScript — zero frameworks, zero build step
 - Audio engine: Web Audio API
-- Sampled instruments: [gleitz/midi-js-soundfonts](https://github.com/gleitz/midi-js-soundfonts) via [soundfont-player](https://github.com/danigb/soundfont-player)
+- Samples: [gleitz/midi-js-soundfonts](https://github.com/gleitz/midi-js-soundfonts) via [soundfont-player](https://github.com/danigb/soundfont-player)
 - Drum synthesis: multi-layer Web Audio nodes per instrument
-- Frequency visualizer: canvas-based FFT display
+- Frequency visualizer: canvas FFT
 
 ---
 
@@ -110,15 +136,13 @@ Click **⚙ Key Settings** to open the remapping panel. Click any key slot, then
 
 # ⬡ Smart Piano 智能钢琴
 
-一个运行在浏览器里的智能键盘钢琴。左手按住和弦，右手旋律自动吸附到最近的和弦音——几乎不可能弹错音。左手松开后，右手恢复自由演奏。无需乐理知识，开箱即玩。
+一个运行在浏览器里的智能键盘钢琴。左手按住和弦，右手弹旋律，音符自动吸附到最近的和弦音，几乎不可能弹错。无需安装、无需服务器、无需乐理知识。
 
 ---
 
 ## 快速开始
 
-用现代浏览器（推荐 Chrome）打开 `smart-piano.html`，点击 **▶ 启动声音** 初始化音频引擎。采样乐器会在后台加载，按钮显示 `…` 表示加载中，`✓` 表示就绪。
-
-无需安装，无需服务器，完全在浏览器本地运行。
+用现代浏览器（推荐 Chrome）打开 `smart-piano.html`，点击 **▶ 启动声音** 初始化音频引擎。采样乐器在后台加载，按钮显示 `…` 为加载中，`✓` 为就绪。点击顶部的 **EN / 中文** 按钮切换界面语言。
 
 ---
 
@@ -126,8 +150,8 @@ Click **⚙ Key Settings** to open the remapping panel. Click any key slot, then
 
 ### 左手 · 和弦
 
-| 键位 | 和弦根音 |
-|------|---------|
+| 键位 | 和弦 |
+|------|------|
 | C | C 大和弦 |
 | D | D 大和弦 |
 | E | E 大和弦 |
@@ -136,9 +160,13 @@ Click **⚙ Key Settings** to open the remapping panel. Click any key slot, then
 | A | A 大和弦 |
 | B | B 大和弦 |
 
-按住 **S** 同时按和弦键 → 小和弦  
-按住 **Q** 同时按和弦键 → 属七和弦  
-按 **M** → 扫弦（当前和弦所有音同时发声）
+| 修饰键 | 效果 |
+|--------|------|
+| 按住 **S** + 和弦键 | 小和弦 |
+| 按住 **Q** + 和弦键 | 属七和弦 |
+| 按住 **W** + 和弦键 | 降半音根音，如 B+W = B♭ |
+| **M** | 扫弦（当前和弦所有音同发） |
+| **N** | 琶音（循环弹出和弦各音） |
 
 ### 右手 · 旋律
 
@@ -153,11 +181,26 @@ Click **⚙ Key Settings** to open the remapping panel. Click any key slot, then
 | Enter | Xi (B) |
 | O | 高音 Do (C↑) |
 
-**黑键：** U=#Do · I=#Re · P=#Fa · [=#So · ]=#La
+**黑键：** U=♯Do · I=♯Re · P=♯Fa · [=♯So · ]=♯La
 
 ### 智能吸附
 
-左手按住和弦时，右手音自动吸附到最近的和弦音，弹任何键都不会跑调。左手松开后，右手恢复原音，自由演奏。
+左手按住和弦时，右手音自动吸附到最近的和弦音（等距时多音同发）。左手松开后，右手恢复原音自由演奏。
+
+### 琶音模式（N 键）
+
+按 **1 / 2 / 3 / 4** 切换模式，当前模式显示在状态栏。
+
+| 键 | 模式 | C 大和弦示例 |
+|----|------|-------------|
+| 1 | 上行 | C → E → G → C↑ |
+| 2 | 根音跳高 | C → C↑ → E → G |
+| 3 | 来回 | C → E → G → C↑ → G → E |
+| 4 | 跳音（根音穿插） | C → E → C → G → C → C↑ |
+
+F♯ 及以上根音（G、A、B…）序列从低八度开始，保持上行感。如 G 大和弦：低 G → 低 B → D → G。
+
+属七和弦为四音循环，不加高八度根音（C7：C → E → G → B♭）。
 
 ### 功能键
 
@@ -166,14 +209,16 @@ Click **⚙ Key Settings** to open the remapping panel. Click any key slot, then
 | 空格 | 延音开/关 |
 | . | 升八度 |
 | , | 降八度 |
+| V | 整体移调升半音 |
+| X | 整体移调降半音 |
 | T | 鼓点速度循环：关 → 80 → 100 → 120 BPM |
-| R | 切换鼓点节奏型（共3种） |
+| R | 切换鼓点节奏型（共 3 种） |
 
 ---
 
 ## 音色列表
 
-所有乐器使用 **MusyngKite** 真实录音采样（首次使用时从 CDN 加载）。网络不可用时自动降级到合成器。
+所有乐器使用 **MusyngKite** 真实录音采样，首次使用时从 CDN 加载。网络不可用时自动降级到合成器。
 
 | 按钮 | 乐器 |
 |------|------|
@@ -190,25 +235,31 @@ Click **⚙ Key Settings** to open the remapping panel. Click any key slot, then
 
 ## 鼓机
 
-按 **T** 循环切换鼓点速度（关 / 80 / 100 / 120 BPM）。  
-按 **R** 切换3种节奏型：
-- 节奏型1 — 标准四四拍，带 crash 镲
-- 节奏型2 — 加花底鼓 + 密集 hi-hat + rim shot
-- 节奏型3 — 拍手声 + tom 鼓填充
+**T** 循环切换速度：关 / 80 / 100 / 120 BPM
+**R** 切换 3 种节奏型：
+- 节奏型 1 — 标准四四拍，第一拍 crash 镲
+- 节奏型 2 — 加花底鼓 + 密集 hi-hat + rim shot
+- 节奏型 3 — 拍手声 + 通鼓填充
 
-所有鼓声通过 Web Audio API 合成（底鼓、军鼓、闭合/开放 hi-hat、rim shot、拍手声、碎钹、通鼓）。
+全部鼓声通过 Web Audio API 合成（底鼓、军鼓、开合 hi-hat、rim shot、拍手、碎镲、通鼓）。
 
 ---
 
 ## 键位自定义
 
-点击 **⚙ 键位设置** 打开面板，点任意键位格子后按新键完成绑定，有冲突会即时提示。点 **保存** 写入 `localStorage`，下次打开自动恢复。点 **恢复默认** 一键重置。
+点击 **⚙ 键位设置** 打开面板，点任意键位格后按新键完成绑定，有冲突即时提示。点 **保存** 写入 `localStorage`，下次打开自动恢复。点 **恢复默认** 一键重置。
+
+---
+
+## 语言切换
+
+点 **EN** 切换英文界面，点 **中文** 切换回中文，偏好保存在 `localStorage`。
 
 ---
 
 ## 技术说明
 
-- 纯原生 HTML/CSS/JavaScript，零框架依赖
+- 纯原生 HTML / CSS / JavaScript，零框架，零构建
 - 音频引擎：Web Audio API
 - 采样来源：[gleitz/midi-js-soundfonts](https://github.com/gleitz/midi-js-soundfonts)，通过 [soundfont-player](https://github.com/danigb/soundfont-player) 加载
 - 鼓声合成：每种鼓声多层 Web Audio 节点叠加
